@@ -1,12 +1,12 @@
-// src/pages/hr/AttendanceRecords.jsx (With Link to Monthly Report)
+// src/pages/hr/AttendanceRecords.jsx (With Holiday & Others + Reason Logic)
 
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom'; // ⬅️ IMPORT 1: Navigation ke liye
+import { useNavigate } from 'react-router-dom'; 
 import { useFirestore } from '../../hooks/useFirestore';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 function AttendanceRecords() {
-    const navigate = useNavigate(); // ⬅️ HOOK 1: Navigate function
+    const navigate = useNavigate();
 
     // 📅 1. Date Selection State
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); 
@@ -39,7 +39,8 @@ function AttendanceRecords() {
                 attendanceId: record?.id || null, 
                 currentStatus: record?.status || 'Not Marked', 
                 timeIn: record?.timeIn || '',
-                timeOut: record?.timeOut || ''
+                timeOut: record?.timeOut || '',
+                reason: record?.reason || '' // Custom Reason
             };
         });
     }, [employees, attendanceRecords]);
@@ -47,26 +48,43 @@ function AttendanceRecords() {
 
     // ⚡ 5. Handle Status Change
     const handleStatusChange = async (employee, newStatus) => {
+        let reason = '';
+
+        // ✨ OTHERS: Ask for Reason
+        if (newStatus === 'Others') {
+            const userReason = prompt("Please enter the reason for 'Others':");
+            if (!userReason || userReason.trim() === '') {
+                return; // Cancel if no reason provided
+            }
+            reason = userReason;
+        }
+
         setLoadingUpdate(employee.uid); 
 
         try {
+            const dataToSave = {
+                status: newStatus,
+                date: selectedDate,
+                timestamp: new Date(),
+                reason: reason // Save reason if applicable
+            };
+
+            if (newStatus !== 'Others') {
+                dataToSave.reason = ''; // Clear reason if status changed back to normal
+            }
+
             if (employee.attendanceId) {
                 // Update existing
-                await updateDocument(employee.attendanceId, { 
-                    status: newStatus,
-                    timestamp: new Date()
-                });
+                await updateDocument(employee.attendanceId, dataToSave);
             } else {
                 // Create new
                 await addDocument({
                     employeeUid: employee.uid,
                     employeeId: employee.empId || 'N/A', 
                     name: employee.name,
-                    date: selectedDate,
-                    status: newStatus,
-                    timeIn: '09:00',
+                    timeIn: '09:00', // Defaults
                     timeOut: '18:00',
-                    timestamp: new Date()
+                    ...dataToSave
                 });
             }
         } catch (error) {
@@ -87,7 +105,6 @@ function AttendanceRecords() {
                 <div className="flex items-center gap-4">
                     <h2 className="text-2xl font-bold text-blue-600">Daily Attendance Sheet</h2>
                     
-                    {/* 🌟 NEW BUTTON: Go to Monthly Report */}
                     <button 
                         onClick={() => navigate('/hr/monthly-report')}
                         className="bg-indigo-600 text-white px-4 py-2 rounded-md shadow hover:bg-indigo-700 transition text-sm flex items-center gap-2"
@@ -135,6 +152,12 @@ function AttendanceRecords() {
                                         <td className="p-4">
                                             <div className="font-bold text-gray-800">{emp.name || emp.email}</div>
                                             <div className="text-xs text-gray-500">{emp.role?.toUpperCase()}</div>
+                                            {/* Show Reason if 'Others' */}
+                                            {emp.currentStatus === 'Others' && emp.reason && (
+                                                <div className="text-xs text-orange-600 mt-1 italic">
+                                                    Note: {emp.reason}
+                                                </div>
+                                            )}
                                         </td>
 
                                         {/* Employee ID */}
@@ -153,6 +176,8 @@ function AttendanceRecords() {
                                                     emp.currentStatus === 'Leave' ? 'bg-yellow-100 text-yellow-800' :
                                                     emp.currentStatus === 'Late' ? 'bg-orange-100 text-orange-800' :
                                                     emp.currentStatus === 'Half Day' ? 'bg-purple-100 text-purple-800' :
+                                                    emp.currentStatus === 'Holiday' ? 'bg-teal-100 text-teal-800' :
+                                                    emp.currentStatus === 'Others' ? 'bg-gray-200 text-gray-800 border border-gray-400' :
                                                     'bg-gray-100 text-gray-600'
                                                 }`}
                                             >
@@ -175,8 +200,10 @@ function AttendanceRecords() {
                                                     <option value="Present">✅ Present</option>
                                                     <option value="Absent">❌ Absent</option>
                                                     <option value="Late">⏰ Late</option>
-                                                    <option value="Leave">✈️ On Leave</option>
                                                     <option value="Half Day">🌗 Half Day</option>
+                                                    <option value="Leave">✈️ On Leave</option>
+                                                    <option value="Holiday">🌴 Holiday</option>
+                                                    <option value="Others">📝 Others (Reason)</option>
                                                 </select>
                                             )}
                                         </td>
