@@ -51,6 +51,11 @@ const navLinks = [
         name: 'Office Data / CMS', 
         roles: ['admin', 'hr', 'employee'] 
     },
+    { 
+    path: '/shared-docs', 
+    name: 'Shared Documents', 
+    roles: ['admin', 'employee', 'hr'] 
+},
     // ---
     { 
         path: '/employee/dashboard', 

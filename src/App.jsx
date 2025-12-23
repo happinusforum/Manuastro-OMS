@@ -20,6 +20,7 @@ import Notfound from './pages/shared/Notfound';
 import MonthlyAttendanceReport from './pages/hr/MonthlyAttendanceReport';
 import MonthlyLeaveReport from './pages/hr/MonthlyLeaveReport';
 import YearlyPayoffReport from './pages/hr/YearlyPayoffReport';
+import SharedDocs from './components/common/SharedDocs';
 // Components
 import AuthGuard from './components/auth/AuthGuard'; 
 // ⬅️ NEW IMPORTS: Global Components yahan import karo
@@ -70,6 +71,8 @@ function App() {
                         <Route path="/admin/dashboard" element={<AuthGuard allowedRoles={['admin']}><AdminDashboard /></AuthGuard>} />
                         <Route path="/admin/user-management" element={<AuthGuard allowedRoles={['admin']}><UserManagement /></AuthGuard>} />
                         <Route path="/office-data" element={<AuthGuard allowedRoles={['admin', 'hr', 'employee']}> <OfficeData /></AuthGuard>}/>
+                        // Protected Route ke andar:
+<Route path="/shared-docs" element={<AuthGuard allowedRoles={['admin', 'employee', 'hr']}><SharedDocs /></AuthGuard>} />
                         
                         {/* 2. HR Routes */}
                         <Route path="/hr/yearly-payoff" element={<AuthGuard allowedRoles={['hr', 'admin']}><YearlyPayoffReport /></AuthGuard>} />
