@@ -21,6 +21,7 @@ import MonthlyAttendanceReport from './pages/hr/MonthlyAttendanceReport';
 import MonthlyLeaveReport from './pages/hr/MonthlyLeaveReport';
 import YearlyPayoffReport from './pages/hr/YearlyPayoffReport';
 import SharedDocs from './components/common/SharedDocs';
+import MyLeaveStatus from './pages/employee/MyLeaveStatus';
 // Components
 import AuthGuard from './components/auth/AuthGuard'; 
 // ⬅️ NEW IMPORTS: Global Components yahan import karo
@@ -84,6 +85,7 @@ function App() {
                         <Route path="/hr/attendance-records" element={<AuthGuard allowedRoles={['hr', 'admin']}><AttendanceRecord /></AuthGuard>} />
 
                         {/* 3. Employee Routes */}
+                        <Route path="/my-leaves" element={<AuthGuard allowedRoles={['employee']}><MyLeaveStatus /></AuthGuard>} />
                         <Route path="/employee/dashboard" element={<AuthGuard allowedRoles={['employee', 'hr', 'admin']}><EmployeeDashboard /></AuthGuard>} />
                         <Route path="/employee/my-tasks" element={<AuthGuard allowedRoles={['employee', 'admin']}><MyTasks /></AuthGuard>} />
                         <Route path="/employee/leave-apply" element={<AuthGuard allowedRoles={['employee', 'admin']}><LeaveApply /></AuthGuard>} /> 

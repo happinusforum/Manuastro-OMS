@@ -1,4 +1,4 @@
-// src/pages/hr/YearlyPayoffReport.jsx
+// src/pages/hr/YearlyPayoffReport.jsx (FINAL: SORTED DROPDOWN)
 
 import React, { useState, useMemo } from 'react';
 import { useFirestore } from '../../hooks/useFirestore';
@@ -8,9 +8,22 @@ function YearlyPayoffReport() {
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
-    // 1. Employees Fetch
+    // 1. Employees Fetch (SORTED LOGIC ADDED HERE)
     const employeeFilters = useMemo(() => [['role', '==', 'employee']], []);
-    const { data: employees } = useFirestore('users', employeeFilters);
+    const { data: rawEmployees } = useFirestore('users', employeeFilters);
+
+    // 🔥 SORTED EMPLOYEES LIST
+    const employees = useMemo(() => {
+        if (!rawEmployees) return [];
+        return [...rawEmployees].sort((a, b) => {
+            const getNum = (id) => {
+                if (!id) return 9999;
+                const match = id.match(/\d+$/);
+                return match ? parseInt(match[0], 10) : 9999;
+            };
+            return getNum(a.empId) - getNum(b.empId);
+        });
+    }, [rawEmployees]);
 
     // 2. Payroll Records Fetch (Filter by Employee)
     const payrollFilters = useMemo(() => 
@@ -23,10 +36,7 @@ function YearlyPayoffReport() {
     const yearlyData = useMemo(() => {
         if (!allRecords || !selectedYear) return [];
 
-        // Filter: Month string (YYYY-MM) should start with Selected Year (YYYY)
         const filtered = allRecords.filter(rec => rec.month.startsWith(selectedYear));
-        
-        // Sort by Month (Jan to Dec)
         return filtered.sort((a, b) => a.month.localeCompare(b.month));
     }, [allRecords, selectedYear]);
 
@@ -47,14 +57,7 @@ function YearlyPayoffReport() {
         const headers = ["Month", "Basic Salary", "Working Days", "Paid Leaves", "Unpaid Leaves", "Imprest", "Advance", "Net Salary"];
         
         const rows = yearlyData.map(rec => [
-            rec.month,
-            rec.basicSalary,
-            rec.totalWorkingDays,
-            rec.paidLeaves,
-            rec.unpaidLeaves,
-            rec.imprest,
-            rec.advanceSalary,
-            rec.netSalary
+            rec.month, rec.basicSalary, rec.totalWorkingDays, rec.paidLeaves, rec.unpaidLeaves, rec.imprest, rec.advanceSalary, rec.netSalary
         ]);
 
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -81,8 +84,8 @@ function YearlyPayoffReport() {
                 <div className="flex-1">
                     <label className="block text-sm font-bold text-gray-600">Select Employee</label>
                     <select value={selectedEmployeeId} onChange={(e) => setSelectedEmployeeId(e.target.value)} className="w-full p-2 border rounded">
-                        <option value="">-- Choose --</option>
-                        {employees?.map(emp => <option key={emp.uid} value={emp.uid}>{emp.name}</option>)}
+                        <option value="">-- Choose (Sorted by ID) --</option>
+                        {employees?.map(emp => <option key={emp.uid} value={emp.uid}>{emp.name} ({emp.empId})</option>)}
                     </select>
                 </div>
                 <div className="flex-1">
@@ -97,31 +100,16 @@ function YearlyPayoffReport() {
                     <>
                         {/* Summary Cards */}
                         <div className="grid grid-cols-3 gap-4 mb-6">
-                            <div className="bg-blue-100 p-4 rounded text-center">
-                                <h4 className="text-blue-800 font-bold">Total Net Pay</h4>
-                                <p className="text-2xl font-bold text-blue-900">₹{totalStats.totalNet.toLocaleString()}</p>
-                            </div>
-                            <div className="bg-red-100 p-4 rounded text-center">
-                                <h4 className="text-red-800 font-bold">Total Advance</h4>
-                                <p className="text-2xl font-bold text-red-900">₹{totalStats.totalAdvance.toLocaleString()}</p>
-                            </div>
-                            <div className="bg-yellow-100 p-4 rounded text-center">
-                                <h4 className="text-yellow-800 font-bold">Total Imprest</h4>
-                                <p className="text-2xl font-bold text-yellow-900">₹{totalStats.totalImprest.toLocaleString()}</p>
-                            </div>
+                            <div className="bg-blue-100 p-4 rounded text-center"><h4 className="text-blue-800 font-bold">Total Net Pay</h4><p className="text-2xl font-bold text-blue-900">₹{totalStats.totalNet.toLocaleString()}</p></div>
+                            <div className="bg-red-100 p-4 rounded text-center"><h4 className="text-red-800 font-bold">Total Advance</h4><p className="text-2xl font-bold text-red-900">₹{totalStats.totalAdvance.toLocaleString()}</p></div>
+                            <div className="bg-yellow-100 p-4 rounded text-center"><h4 className="text-yellow-800 font-bold">Total Imprest</h4><p className="text-2xl font-bold text-yellow-900">₹{totalStats.totalImprest.toLocaleString()}</p></div>
                         </div>
 
                         <div className="bg-white rounded shadow overflow-hidden">
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-gray-100 border-b">
                                     <tr>
-                                        <th className="p-3">Month</th>
-                                        <th className="p-3">Basic</th>
-                                        <th className="p-3">Work Days</th>
-                                        <th className="p-3">Unpaid L.</th>
-                                        <th className="p-3">Imprest</th>
-                                        <th className="p-3">Advance</th>
-                                        <th className="p-3">Net Salary</th>
+                                        <th className="p-3">Month</th><th className="p-3">Basic</th><th className="p-3">Work Days</th><th className="p-3">Unpaid L.</th><th className="p-3">Imprest</th><th className="p-3">Advance</th><th className="p-3">Net Salary</th>
                                     </tr>
                                 </thead>
                                 <tbody>

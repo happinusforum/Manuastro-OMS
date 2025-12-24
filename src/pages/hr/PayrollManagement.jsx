@@ -1,4 +1,4 @@
-// src/pages/hr/PayrollManagement.jsx
+// src/pages/hr/PayrollManagement.jsx (FINAL: SORTED DROPDOWN & LOGIC)
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useFirestore } from '../../hooks/useFirestore';
@@ -11,12 +11,12 @@ const initialFormState = {
     month: new Date().toISOString().slice(0, 7), // YYYY-MM
     basicSalary: 0,
     totalWorkingDays: 30,
-    activeWorkingDays: 0, // Calculated
+    activeWorkingDays: 0, 
     paidLeaves: 0,
     unpaidLeaves: 0,
-    imprest: 0, // Expenses advance
+    imprest: 0, 
     advanceSalary: 0,
-    netSalary: 0, // Final amount
+    netSalary: 0, 
     status: 'Processed'
 };
 
@@ -26,12 +26,24 @@ function PayrollManagement() {
     const [editingId, setEditingId] = useState(null);
     const [loadingForm, setLoadingForm] = useState(false);
 
-    // 1. Fetch Employees (Dropdown ke liye)
+    // 1. Fetch Employees (SORTED LOGIC ADDED HERE)
     const employeeFilters = useMemo(() => [['role', '==', 'employee']], []);
-    const { data: employees } = useFirestore('users', employeeFilters);
+    const { data: rawEmployees } = useFirestore('users', employeeFilters);
 
-    // 2. Fetch Payroll Records (List ke liye)
-    // Default sab dikhao, baad me month filter laga sakte hain
+    // 🔥 SORTED EMPLOYEES LIST
+    const employees = useMemo(() => {
+        if (!rawEmployees) return [];
+        return [...rawEmployees].sort((a, b) => {
+            const getNum = (id) => {
+                if (!id) return 9999;
+                const match = id.match(/\d+$/);
+                return match ? parseInt(match[0], 10) : 9999;
+            };
+            return getNum(a.empId) - getNum(b.empId);
+        });
+    }, [rawEmployees]);
+
+    // 2. Fetch Payroll Records
     const { 
         data: payrollRecords, 
         loading: loadingData, 
@@ -48,22 +60,15 @@ function PayrollManagement() {
         const imprest = parseFloat(formData.imprest) || 0;
         const advance = parseFloat(formData.advanceSalary) || 0;
 
-        // 1. Calculate Per Day Salary
         const perDaySalary = totalDays > 0 ? basic / totalDays : 0;
-
-        // 2. Calculate Deductions for Unpaid Leaves
         const leaveDeduction = perDaySalary * unpaid;
-
-        // 3. Active Working Days
         const activeDays = totalDays - unpaid;
-
-        // 4. Final Net Salary
         const net = basic - leaveDeduction - imprest - advance;
 
         setFormData(prev => ({
             ...prev,
             activeWorkingDays: activeDays,
-            netSalary: Math.round(net) // Round off
+            netSalary: Math.round(net)
         }));
     }, [formData.basicSalary, formData.totalWorkingDays, formData.unpaidLeaves, formData.imprest, formData.advanceSalary]);
 
@@ -72,7 +77,6 @@ function PayrollManagement() {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
         
-        // Agar Employee select kiya, toh Name automatically set karo
         if (name === 'employeeId') {
             const emp = employees.find(e => e.uid === value);
             if (emp) {
@@ -134,7 +138,7 @@ function PayrollManagement() {
                     <div className="md:col-span-1">
                         <label className="text-xs font-bold text-gray-600">Select Employee</label>
                         <select name="employeeId" value={formData.employeeId} onChange={handleChange} className="w-full p-2 border rounded" required>
-                            <option value="">-- Select --</option>
+                            <option value="">-- Select (Sorted by ID) --</option>
                             {employees?.map(emp => <option key={emp.uid} value={emp.uid}>{emp.name} ({emp.empId})</option>)}
                         </select>
                     </div>

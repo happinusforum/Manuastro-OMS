@@ -1,4 +1,4 @@
-// src/pages/hr/AttendanceRecords.jsx (With Holiday & Others + Reason Logic)
+// src/pages/hr/AttendanceRecords.jsx (FINAL: SORTED BY EMP ID & REASON PROMPT)
 
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom'; 
@@ -14,35 +14,36 @@ function AttendanceRecords() {
 
     // 👥 2. Fetch All Employees
     const employeeFilters = useMemo(() => [['role', '==', 'employee']], []);
-    const { 
-        data: employees, 
-        loading: loadingEmployees 
-    } = useFirestore('users', employeeFilters);
+    const { data: employees, loading: loadingEmployees } = useFirestore('users', employeeFilters);
 
     // 📝 3. Fetch Attendance for Selected Date
     const attendanceFilters = useMemo(() => [['date', '==', selectedDate]], [selectedDate]);
-    const { 
-        data: attendanceRecords, 
-        loading: loadingAttendance, 
-        addDocument, 
-        updateDocument 
-    } = useFirestore('attendance', attendanceFilters);
+    const { data: attendanceRecords, loading: loadingAttendance, addDocument, updateDocument } = useFirestore('attendance', attendanceFilters);
 
-    // 🔄 4. Data Merging Logic
+    // 🔄 4. Data Merging & Sorting Logic (FIXED HERE)
     const attendanceSheet = useMemo(() => {
         if (!employees) return [];
         
-        return employees.map(emp => {
+        const mergedData = employees.map(emp => {
             const record = attendanceRecords?.find(r => r.employeeUid === emp.uid);
             return {
                 ...emp, 
                 attendanceId: record?.id || null, 
                 currentStatus: record?.status || 'Not Marked', 
-                timeIn: record?.timeIn || '',
-                timeOut: record?.timeOut || '',
                 reason: record?.reason || '' // Custom Reason
             };
         });
+
+        // 🔥 SORTING LOGIC: Extract Number from EmpID
+        return mergedData.sort((a, b) => {
+            const getNum = (id) => {
+                if (!id) return 9999; // If no ID, put at last
+                const match = id.match(/\d+$/); // Extracts '006' from 'MA/IT/006'
+                return match ? parseInt(match[0], 10) : 9999;
+            };
+            return getNum(a.empId) - getNum(b.empId);
+        });
+
     }, [employees, attendanceRecords]);
 
 

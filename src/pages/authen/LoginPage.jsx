@@ -2,7 +2,9 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom'; 
-import { useAuth } from '../../context/AuthContext'; // ⬅️ Context import kiya
+import { useAuth } from '../../context/AuthContext'; 
+import { doc, getDoc } from 'firebase/firestore'; // ⬅️ Database fetch karne ke liye
+import { db } from '../../Firebase'; // ⬅️ Firestore instance
 
 function LoginPage() {
     const [email, setEmail] = useState('');
@@ -12,8 +14,8 @@ function LoginPage() {
 
     const navigate = useNavigate();
     
-    // 💡 CHANGE: 'login' function Context se nikala (Jo Persistence handle karega)
-    const { login } = useAuth(); 
+    // 💡 Logout bhi chahiye taaki agar role match na ho toh user ko kick out kar sakein
+    const { login, logout } = useAuth(); 
 
     const handleLogin = async (e, intendedRole) => {
         e.preventDefault(); 
@@ -21,27 +23,47 @@ function LoginPage() {
         setLoading(true);
 
         try {
-            // 💡 FIX: Ab hum Context wala login function call kar rahe hain
-            // Yeh function background mein 'setPersistence(SESSION)' chalayega
-            await login(email, password); 
-            
+            // 1. Firebase Auth se Login Check karo (Email/Password sahi hai ya nahi)
+            const userCredential = await login(email, password);
+            const user = userCredential.user;
+
+            // 2. Ab Database se User ka Asli Role pata karo
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (!userDoc.exists()) {
+                await logout(); // Data nahi mila toh logout
+                throw new Error("User data not found in database.");
+            }
+
+            const userData = userDoc.data();
+            const actualRole = userData.role; // Database mein jo role hai (e.g., 'employee')
+
+            // 3. 🔒 SECURITY CHECK: Role Match Logic
+            // Agar user 'employee' hai par 'admin' button dabaya -> ERROR
+            if (actualRole !== intendedRole) {
+                await logout(); // Turant Logout karo
+                setError(`Access Denied! You are registered as '${actualRole.toUpperCase()}', but trying to login as '${intendedRole.toUpperCase()}'.`);
+                setLoading(false);
+                return; // Code yahin rok do
+            }
+
+            // 4. Agar sab sahi hai, toh Dashboard par bhejo
             setLoading(false);
             
-            // 2. Client-side Redirection (As requested)
-            // Note: Asli security AuthGuard mein hoti hai, yeh bas UX ke liye hai.
             let path = '/';
-            if (intendedRole === 'admin') path = '/admin/dashboard';
-            else if (intendedRole === 'hr') path = '/hr/dashboard';
-            else if (intendedRole === 'employee') path = '/employee/dashboard';
+            if (actualRole === 'admin') path = '/admin/dashboard';
+            else if (actualRole === 'hr') path = '/hr/dashboard';
+            else if (actualRole === 'employee') path = '/employee/dashboard';
 
             navigate(path);
 
         } catch (err) {
             console.error("Login Failed:", err);
-            // Error message ko user-friendly banaya
             let msg = "Failed to login.";
             if (err.code === 'auth/invalid-credential') msg = "Wrong Email or Password.";
             if (err.code === 'auth/too-many-requests') msg = "Too many attempts. Try later.";
+            if (err.message.includes("Access Denied")) msg = err.message; // Role error dikhane ke liye
             
             setError(msg);
             setLoading(false);
@@ -73,9 +95,8 @@ function LoginPage() {
                     className="w-full mt-3 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
                 
-                {error && <p className="text-sm font-medium text-red-600 mt-3">Error: {error}</p>}
+                {error && <p className="text-sm font-bold text-red-600 mt-3 p-2 bg-red-50 border border-red-200 rounded">{error}</p>}
                 
-                {/* 🚀 BUTTONS FOR TESTING ROLES 🚀 */}
                 <div className="flex gap-3 justify-between mt-6">
                     <button 
                         type="button"

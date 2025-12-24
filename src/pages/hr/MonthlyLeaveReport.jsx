@@ -1,4 +1,4 @@
-// src/pages/hr/MonthlyLeaveReport.jsx
+// src/pages/hr/MonthlyLeaveReport.jsx (FINAL: SORTED DROPDOWN)
 
 import React, { useState, useMemo } from 'react';
 import { useFirestore } from '../../hooks/useFirestore';
@@ -8,12 +8,24 @@ function MonthlyLeaveReport() {
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
 
-    // 1. Fetch Employees (Dropdown ke liye)
+    // 1. Fetch Employees (SORTED LOGIC ADDED HERE)
     const employeeFilters = useMemo(() => [['role', '==', 'employee']], []);
-    const { data: employees } = useFirestore('users', employeeFilters);
+    const { data: rawEmployees } = useFirestore('users', employeeFilters);
+
+    // 🔥 SORTED EMPLOYEES LIST
+    const employees = useMemo(() => {
+        if (!rawEmployees) return [];
+        return [...rawEmployees].sort((a, b) => {
+            const getNum = (id) => {
+                if (!id) return 9999;
+                const match = id.match(/\d+$/);
+                return match ? parseInt(match[0], 10) : 9999;
+            };
+            return getNum(a.empId) - getNum(b.empId);
+        });
+    }, [rawEmployees]);
 
     // 2. Fetch Leaves for Selected Employee
-    // Note: Hum saari leaves mangwa lenge fir JS se filter karenge date range ke liye
     const leavesFilters = useMemo(() => 
         selectedEmployeeId ? [['userId', '==', selectedEmployeeId]] : null, 
     [selectedEmployeeId]);
@@ -24,54 +36,41 @@ function MonthlyLeaveReport() {
     const reportData = useMemo(() => {
         if (!allLeaves || !selectedMonth) return { days: [], stats: {} };
 
-        const targetMonth = selectedMonth; // e.g., "2025-12"
+        const targetMonth = selectedMonth; 
         let processedDays = [];
         
         // Stats Counters
-        let stats = {
-            Sick: 0,
-            Casual: 0,
-            Earned: 0,
-            Unpaid: 0,
-            Total: 0
-        };
+        let stats = { Sick: 0, Casual: 0, Earned: 0, Unpaid: 0, Total: 0 };
 
-        // Sirf APPROVED leaves ko process karo
+        // Filter APPROVED leaves only
         const approvedLeaves = allLeaves.filter(l => l.status === 'Approved');
 
         approvedLeaves.forEach(leave => {
             let current = new Date(leave.startDate);
             const end = new Date(leave.endDate);
 
-            // Date Range Loop: Har din ko check karo
+            // Date Range Loop
             while (current <= end) {
-                const dateStr = current.toISOString().split('T')[0]; // "2025-12-01"
+                const dateStr = current.toISOString().split('T')[0];
                 
-                // Agar ye din SELECTED MONTH ka hai, toh list mein daalo
+                // If date matches selected month
                 if (dateStr.startsWith(targetMonth)) {
                     processedDays.push({
                         date: dateStr,
-                        type: leave.type, // Sick, Casual etc.
+                        type: leave.type,
                         reason: leave.reason,
                         status: leave.status
                     });
 
-                    // Update Stats
-                    if (stats[leave.type] !== undefined) {
-                        stats[leave.type]++;
-                    } else {
-                        // Agar koi nayi type ho toh handle kar lo
-                        stats[leave.type] = (stats[leave.type] || 0) + 1;
-                    }
+                    if (stats[leave.type] !== undefined) stats[leave.type]++;
+                    else stats[leave.type] = (stats[leave.type] || 0) + 1;
                     stats.Total++;
                 }
-                
-                // Next Day pe jao
                 current.setDate(current.getDate() + 1);
             }
         });
 
-        // Date ke hisaab se sort karo
+        // Sort by Date
         processedDays.sort((a, b) => new Date(a.date) - new Date(b.date));
 
         return { days: processedDays, stats };
@@ -80,10 +79,7 @@ function MonthlyLeaveReport() {
 
     // 4. CSV Export Function
     const exportToCSV = () => {
-        if (!reportData.days.length) {
-            alert("No data to export!");
-            return;
-        }
+        if (!reportData.days.length) return alert("No data to export!");
 
         const empName = employees?.find(e => e.uid === selectedEmployeeId)?.name || 'Employee';
         const headers = ["Date", "Day", "Leave Type", "Reason", "Status"];
@@ -91,27 +87,16 @@ function MonthlyLeaveReport() {
         const rows = reportData.days.map(record => {
             const dayName = new Date(record.date).toLocaleDateString('en-US', { weekday: 'short' });
             return [
-                record.date,
-                dayName,
-                record.type,
-                `"${record.reason}"`, // Quotes taaki comma se CSV na tute
-                record.status
+                record.date, dayName, record.type, `"${record.reason}"`, record.status
             ];
         });
 
-        const csvContent = [
-            headers.join(','), 
-            ...rows.map(row => row.join(','))
-        ].join('\n');
-
+        const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `Leaves_${empName}_${selectedMonth}.csv`);
-        document.body.appendChild(link);
+        link.href = URL.createObjectURL(blob);
+        link.download = `Leaves_${empName}_${selectedMonth}.csv`;
         link.click();
-        document.body.removeChild(link);
     };
 
     return (
@@ -134,7 +119,7 @@ function MonthlyLeaveReport() {
                         onChange={(e) => setSelectedEmployeeId(e.target.value)}
                         className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
                     >
-                        <option value="" disabled>-- Choose Employee --</option>
+                        <option value="" disabled>-- Choose Employee (Sorted) --</option>
                         {employees?.map(emp => (
                             <option key={emp.uid} value={emp.uid}>{emp.name} ({emp.empId})</option>
                         ))}

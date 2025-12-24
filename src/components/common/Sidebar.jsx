@@ -1,4 +1,4 @@
-// src/components/common/Sidebar.jsx (LAYOUT FIXED)
+// src/components/common/Sidebar.jsx (ADDED MY LEAVE STATUS LINK)
 
 import React from 'react';
 import { NavLink } from 'react-router-dom'; 
@@ -46,17 +46,18 @@ const navLinks = [
         name: 'Yearly Payoff', 
         roles: ['hr', 'admin'] 
     },
+   
     { 
         path: '/office-data', 
         name: 'Office Data / CMS', 
         roles: ['admin', 'hr', 'employee'] 
     },
     { 
-    path: '/shared-docs', 
-    name: 'Shared Documents', 
-    roles: ['admin', 'employee', 'hr'] 
-},
-    // ---
+        path: '/shared-docs', 
+        name: 'Shared Documents', 
+        roles: ['admin', 'employee', 'hr'] 
+    },
+    // --- EMPLOYEE SECTION ---
     { 
         path: '/employee/dashboard', 
         name: 'My Dashboard', 
@@ -65,11 +66,17 @@ const navLinks = [
     { 
         path: '/employee/my-tasks', 
         name: 'My Tasks', 
-        roles: ['employee', 'admin'] 
+        roles: ['employee', 'admin', 'hr'] 
     },
     { 
         path: '/employee/leave-apply', 
         name: 'Apply Leave/Query', 
+        roles: ['employee', 'admin'] 
+    },
+    // 👇 NEW LINK ADDED HERE
+    { 
+        path: '/my-leaves', 
+        name: 'My Leave Status', 
         roles: ['employee', 'admin'] 
     },
     { 
@@ -94,10 +101,9 @@ function Sidebar() {
             width: '250px', 
             backgroundColor: '#333', 
             color: 'white', 
-            // 👇 KEY CHANGES HERE FOR SCROLL FIX
-            height: '100%',        // Parent ki height lega (jo App.jsx me fixed hai)
-            overflowY: 'auto',     // Sidebar ke andar scroll aayega agar menu bada hua
-            flexShrink: 0,         // Sidebar ko shrink hone se rokega
+            height: '100%',        // Parent ki height lega
+            overflowY: 'auto',     // Scrollbar enable
+            flexShrink: 0,         // Shrink hone se rokega
             padding: '20px', 
             display: 'flex', 
             flexDirection: 'column' 
