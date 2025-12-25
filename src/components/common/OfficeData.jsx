@@ -1,4 +1,4 @@
-// src/components/common/OfficeData.jsx (FIXED: MANUAL FOLDER -> SHEET HIERARCHY)
+// src/components/common/OfficeData.jsx (MODERN UI & RESPONSIVE)
 
 import React, { useState, useMemo, useRef } from 'react';
 import { useFirestore } from '../../hooks/useFirestore';
@@ -16,7 +16,6 @@ const FolderBrowser = ({ parentId, parentName, onSelect, onBack, isRoot }) => {
     const [newFolderName, setNewFolderName] = useState('');
     const [newFields, setNewFields] = useState(['Name', 'Contact Number', 'Address']); 
     
-    // Fetch Data (Folders or Sheets based on parentId)
     const folderFilters = useMemo(() => [['parentId', '==', parentId]], [parentId]);
     const { data: items, loading, addDocument, deleteDocument } = useFirestore('office_folders', folderFilters);
     
@@ -24,7 +23,7 @@ const FolderBrowser = ({ parentId, parentName, onSelect, onBack, isRoot }) => {
     const [isImporting, setIsImporting] = useState(false);
     const { addDocument: addDataEntry } = useFirestore('office_data');
 
-    // --- 🟢 EXCEL IMPORT ---
+    // --- EXCEL IMPORT (Functionality Unchanged) ---
     const handleFileChange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -36,7 +35,6 @@ const FolderBrowser = ({ parentId, parentName, onSelect, onBack, isRoot }) => {
             try {
                 const data = new Uint8Array(event.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
-                // Create Parent Workbook
                 const parentFolderId = await addDocument({ name: fileName, type: 'workbook', parentId: 'ROOT', createdAt: new Date() });
 
                 for (const sheetName of workbook.SheetNames) {
@@ -57,13 +55,11 @@ const FolderBrowser = ({ parentId, parentName, onSelect, onBack, isRoot }) => {
         };
     };
 
-    // --- 🔴 DELETE ---
     const handleDelete = async (e, id) => {
         e.stopPropagation();
         if(window.confirm("Delete this item and all contents?")) await deleteDocument(id);
     };
 
-    // --- 📥 DOWNLOAD ---
     const handleDownloadWorkbook = async (e, workbookItem) => {
         e.stopPropagation();
         if (isDownloading) return;
@@ -91,44 +87,17 @@ const FolderBrowser = ({ parentId, parentName, onSelect, onBack, isRoot }) => {
         finally { setIsDownloading(false); }
     };
 
-    // --- 🟢 SMART MANUAL CREATE (UPDATED) ---
     const handleCreate = async (e) => {
         e.preventDefault();
-        
-        if (!newFolderName.trim()) {
-            alert("Name is required!");
-            return;
-        }
-
+        if (!newFolderName.trim()) { alert("Name is required!"); return; }
         if (isRoot) {
-            // Case 1: Root Level pe hain -> Folder (Workbook) banao
-            // Folder ke liye 'fields' ki zaroorat nahi hai
-            await addDocument({
-                name: newFolderName,
-                type: 'workbook', // Yeh Folder container hai
-                parentId: 'ROOT',
-                createdAt: new Date()
-            });
+            await addDocument({ name: newFolderName, type: 'workbook', parentId: 'ROOT', createdAt: new Date() });
         } else {
-            // Case 2: Folder ke andar hain -> Sheet (Table) banao
-            // Sheet ke liye 'fields' (columns) chahiye
             const cleanedFields = newFields.filter(f => f.trim() !== '');
-            if (cleanedFields.length === 0) {
-                alert("Sheet needs at least one column!");
-                return;
-            }
-            await addDocument({
-                name: newFolderName,
-                type: 'sheet', // Yeh Data Table hai
-                parentId: parentId, // Parent Folder ka ID
-                fields: cleanedFields,
-                createdAt: new Date()
-            });
+            if (cleanedFields.length === 0) { alert("Sheet needs at least one column!"); return; }
+            await addDocument({ name: newFolderName, type: 'sheet', parentId: parentId, fields: cleanedFields, createdAt: new Date() });
         }
-
-        setIsCreating(false);
-        setNewFolderName('');
-        setNewFields(['Name', 'Contact Number', 'Address']);
+        setIsCreating(false); setNewFolderName(''); setNewFields(['Name', 'Contact Number', 'Address']);
     };
 
     const handleAddField = () => setNewFields([...newFields, '']);
@@ -137,65 +106,112 @@ const FolderBrowser = ({ parentId, parentName, onSelect, onBack, isRoot }) => {
     if (isImporting || isDownloading) return <LoadingSpinner message={isDownloading ? "Generating Excel File..." : "Processing Import..."} />;
 
     return (
-        <div className="p-6">
-            {/* Navigation Header */}
-            <div className="flex flex-wrap justify-between items-center mb-6 gap-4 border-b pb-4">
+        <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b pb-4">
                 <div className="flex items-center gap-3">
-                    {!isRoot && <button onClick={onBack} className="text-gray-500 hover:text-gray-800 text-xl font-bold">⬅</button>}
+                    {!isRoot && (
+                        <button onClick={onBack} className="bg-gray-200 hover:bg-gray-300 p-2 rounded-full transition shadow-sm">
+                            ⬅
+                        </button>
+                    )}
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-800">{isRoot ? "Office Data" : `📂 ${parentName}`}</h2>
-                        <p className="text-sm text-gray-500">{isRoot ? "Create Folders or Import Excel" : "Create Sheets inside this Folder"}</p>
+                        <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+                            {isRoot ? "🗄️ Office Data" : `📂 ${parentName}`}
+                        </h2>
+                        <p className="text-xs md:text-sm text-gray-500">
+                            {isRoot ? "Manage Workbooks & Folders" : "Manage Sheets inside"}
+                        </p>
                     </div>
                 </div>
-                <div className="flex gap-3">
-                    {isRoot && <><input type="file" accept=".xlsx, .xls" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} /><button onClick={() => fileInputRef.current.click()} className="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 flex items-center gap-2">📊 Import Excel File</button></>}
-                    <button onClick={() => setIsCreating(true)} className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700">
-                        {/* Dynamic Button Text */}
+                
+                <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                    {isRoot && (
+                        <>
+                            <input type="file" accept=".xlsx, .xls" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+                            <button 
+                                onClick={() => fileInputRef.current.click()} 
+                                className="bg-emerald-600 text-white px-4 py-2 rounded-lg shadow hover:bg-emerald-700 transition text-sm font-semibold flex items-center gap-2 flex-1 md:flex-none justify-center"
+                            >
+                                📊 Import Excel
+                            </button>
+                        </>
+                    )}
+                    <button 
+                        onClick={() => setIsCreating(true)} 
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition text-sm font-semibold flex-1 md:flex-none justify-center"
+                    >
                         + New {isRoot ? 'Folder' : 'Sheet'}
                     </button>
                 </div>
             </div>
 
-            {/* Creation Form */}
+            {/* Create Form (Modal Style) */}
             {isCreating && (
-                <div className="bg-white p-6 rounded shadow-md mb-8 border border-blue-200">
-                    <h3 className="font-bold mb-4">Create New {isRoot ? 'Folder' : 'Sheet'}</h3>
-                    <div className="mb-4">
-                        <label className="block text-sm font-bold mb-1">{isRoot ? "Folder Name" : "Sheet Name"}</label>
-                        <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} className="w-full p-2 border rounded" placeholder={isRoot ? "e.g. Vendor Data" : "e.g. Sheet 1"} />
-                    </div>
-                    
-                    {/* 🔥 Only show Columns input if NOT creating a root folder (i.e. creating a sheet) */}
-                    {!isRoot && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md animate-fade-in-down">
+                        <h3 className="font-bold text-lg mb-4 text-gray-800">Create New {isRoot ? 'Folder' : 'Sheet'}</h3>
                         <div className="mb-4">
-                            <label className="block text-sm font-bold mb-2">Define Columns</label>
-                            {newFields.map((f, i) => (<div key={i} className="flex gap-2 mb-2"><input type="text" value={f} onChange={(e) => handleFieldChange(i, e.target.value)} className="flex-1 p-2 border rounded" placeholder={`Column ${i+1}`} /></div>))}
-                            <button onClick={handleAddField} className="text-sm text-blue-600 font-bold">+ Add Column</button>
+                            <label className="block text-sm font-semibold mb-1 text-gray-600">{isRoot ? "Folder Name" : "Sheet Name"}</label>
+                            <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder={isRoot ? "e.g. Vendor Data" : "e.g. Sheet 1"} />
                         </div>
-                    )}
+                        
+                        {!isRoot && (
+                            <div className="mb-4 max-h-40 overflow-y-auto custom-scrollbar">
+                                <label className="block text-sm font-semibold mb-2 text-gray-600">Define Columns</label>
+                                {newFields.map((f, i) => (
+                                    <div key={i} className="flex gap-2 mb-2">
+                                        <input type="text" value={f} onChange={(e) => handleFieldChange(i, e.target.value)} className="flex-1 p-2 border rounded text-sm" placeholder={`Column ${i+1}`} />
+                                    </div>
+                                ))}
+                                <button onClick={handleAddField} className="text-xs text-blue-600 font-bold hover:underline">+ Add Column</button>
+                            </div>
+                        )}
 
-                    <div className="flex gap-2">
-                        <button onClick={handleCreate} className="bg-green-600 text-white px-4 py-2 rounded">Create</button>
-                        <button onClick={() => setIsCreating(false)} className="bg-gray-400 text-white px-4 py-2 rounded">Cancel</button>
+                        <div className="flex gap-3 justify-end mt-4">
+                            <button onClick={() => setIsCreating(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Cancel</button>
+                            <button onClick={handleCreate} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow">Create</button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* List View */}
+            {/* Grid View */}
             {loading ? <LoadingSpinner /> : (
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {items?.map(item => (
-                        <div key={item.id} onClick={() => onSelect(item)} className={`p-6 rounded-xl shadow cursor-pointer hover:shadow-lg transition border group relative ${item.type === 'workbook' ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'}`}>
-                            <div className="text-4xl mb-2">{item.type === 'workbook' ? '📁' : '📄'}</div>
-                            <h3 className="font-bold text-lg text-gray-800 truncate" title={item.name}>{item.name}</h3>
-                            <p className="text-xs text-gray-500 mt-1">{item.type === 'workbook' ? 'Folder / Group' : `${item.fields?.length || 0} Columns`}</p>
-                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition">
-                                {item.type === 'workbook' && <button onClick={(e) => handleDownloadWorkbook(e, item)} title="Download" className="text-green-600 hover:text-green-800 bg-white rounded-full p-1 shadow-sm">📥</button>}
-                                <button onClick={(e) => handleDelete(e, item.id)} className="text-red-400 hover:text-red-600 bg-white rounded-full p-1 shadow-sm">🗑️</button>
+                        <div key={item.id} onClick={() => onSelect(item)} className={`p-5 rounded-xl shadow-sm hover:shadow-md transition border cursor-pointer group relative flex flex-col justify-between h-32 ${item.type === 'workbook' ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-gray-100'}`}>
+                            <div>
+                                <div className="text-3xl mb-2">{item.type === 'workbook' ? '📁' : '📄'}</div>
+                                <h3 className="font-bold text-gray-800 truncate text-sm md:text-base" title={item.name}>{item.name}</h3>
+                                <p className="text-xs text-gray-500 mt-1 truncate">{item.type === 'workbook' ? 'Folder / Group' : `${item.fields?.length || 0} Columns`}</p>
+                            </div>
+                            
+                            {/* Action Buttons (Visible on Hover/Touch) */}
+                            <div className="absolute top-3 right-3 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
+                                {item.type === 'workbook' && (
+                                    <button 
+                                        onClick={(e) => handleDownloadWorkbook(e, item)} 
+                                        title="Download" 
+                                        className="bg-white text-green-600 hover:text-green-800 p-1.5 rounded-full shadow-sm border border-gray-100"
+                                    >
+                                        📥
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={(e) => handleDelete(e, item.id)} 
+                                    className="bg-white text-red-400 hover:text-red-600 p-1.5 rounded-full shadow-sm border border-gray-100"
+                                >
+                                    🗑️
+                                </button>
                             </div>
                         </div>
                     ))}
-                    {items?.length === 0 && <p className="text-gray-500 col-span-full text-center py-10">{isRoot ? "No folders yet. Create one!" : "No sheets yet. Create one!"}</p>}
+                    {items?.length === 0 && (
+                        <div className="col-span-full text-center py-20 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
+                            {isRoot ? "No folders yet. Start by creating one!" : "No sheets inside this folder."}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -203,7 +219,7 @@ const FolderBrowser = ({ parentId, parentName, onSelect, onBack, isRoot }) => {
 };
 
 // ----------------------------------------------------------------------
-// 📄 COMPONENT: DATA TABLE (With Search & Sticky Headers - UNCHANGED)
+// 📄 COMPONENT: DATA TABLE VIEW
 // ----------------------------------------------------------------------
 const FolderDataView = ({ folder, onBack }) => {
     const [isAdding, setIsAdding] = useState(false);
@@ -211,31 +227,19 @@ const FolderDataView = ({ folder, onBack }) => {
     const [newColumnName, setNewColumnName] = useState('');
     const [formData, setFormData] = useState({});
     const [editingId, setEditingId] = useState(null);
-    
-    // 🔍 SEARCH STATE
     const [searchQuery, setSearchQuery] = useState('');
 
     const dataFilters = useMemo(() => [['folderId', '==', folder.id]], [folder.id]);
     const { data: rawFolderData, loading, addDocument, updateDocument, deleteDocument } = useFirestore('office_data', dataFilters);
 
-    // 🔄 SORTING + SEARCHING LOGIC
     const folderData = useMemo(() => {
         if (!rawFolderData) return [];
-        
-        // 1. Sort by Sequence
         const sorted = [...rawFolderData].sort((a, b) => {
             if (a._sortIndex !== undefined && b._sortIndex !== undefined) return a._sortIndex - b._sortIndex;
             return (a.createdAt?.toDate ? a.createdAt.toDate() : 0) - (b.createdAt?.toDate ? b.createdAt.toDate() : 0);
         });
-
-        // 2. Search Filter
         if (!searchQuery.trim()) return sorted;
-
-        return sorted.filter(row => {
-            return folder.fields.some(field => 
-                String(row[field] || '').toLowerCase().includes(searchQuery.toLowerCase())
-            );
-        });
+        return sorted.filter(row => folder.fields.some(field => String(row[field] || '').toLowerCase().includes(searchQuery.toLowerCase())));
     }, [rawFolderData, searchQuery, folder.fields]);
 
     const handleInputChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
@@ -253,7 +257,6 @@ const FolderDataView = ({ folder, onBack }) => {
         setFormData(record);
         setEditingId(record.id);
         setIsAdding(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleAddColumn = async () => {
@@ -268,7 +271,7 @@ const FolderDataView = ({ folder, onBack }) => {
     };
 
     const handleDeleteColumn = async (columnName) => {
-        if (!window.confirm(`Are you sure you want to delete the column "${columnName}"? Data in this column will be hidden.`)) return;
+        if (!window.confirm(`Delete column "${columnName}"? Data will be hidden.`)) return;
         try {
             const updatedFields = folder.fields.filter(f => f !== columnName);
             const folderRef = doc(db, 'office_folders', folder.id);
@@ -287,103 +290,116 @@ const FolderDataView = ({ folder, onBack }) => {
     };
 
     return (
-        <div className="p-6 h-full flex flex-col">
-            <div className="flex flex-col gap-4 border-b pb-4 mb-4">
+        <div className="p-4 md:p-6 h-full flex flex-col bg-gray-50 min-h-screen">
+            
+            {/* Header Actions */}
+            <div className="flex flex-col gap-4 border-b pb-4 mb-4 bg-white p-4 rounded-xl shadow-sm">
                 <div className="flex flex-wrap justify-between items-center gap-4">
-                    <div className="flex items-center gap-4">
-                        <button onClick={onBack} className="text-gray-500 hover:text-gray-800 text-lg font-bold">⬅ Back</button>
+                    <div className="flex items-center gap-3">
+                        <button onClick={onBack} className="bg-gray-100 hover:bg-gray-200 p-2 rounded-full transition">⬅</button>
                         <div>
-                            <h2 className="text-2xl font-bold text-gray-800">📄 {folder.name}</h2>
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Data Sheet</span>
+                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">📄 {folder.name}</h2>
+                            <span className="text-[10px] uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold">Sheet</span>
                         </div>
                     </div>
-                    <div className="flex gap-2">
-                        <button onClick={handleDownloadExcel} className="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700">📊 Export</button>
-                        <button onClick={() => setIsAddingColumn(true)} className="bg-purple-600 text-white px-4 py-2 rounded shadow hover:bg-purple-700">+ Column</button>
-                        <button onClick={() => { setIsAdding(true); setEditingId(null); setFormData({}); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700">+ Row</button>
+                    
+                    <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                        <button onClick={handleDownloadExcel} className="bg-green-600 text-white px-3 py-1.5 rounded-lg shadow hover:bg-green-700 text-sm whitespace-nowrap">📊 Export</button>
+                        <button onClick={() => setIsAddingColumn(true)} className="bg-purple-600 text-white px-3 py-1.5 rounded-lg shadow hover:bg-purple-700 text-sm whitespace-nowrap">+ Column</button>
+                        <button onClick={() => { setIsAdding(true); setEditingId(null); setFormData({}); }} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow hover:bg-blue-700 text-sm whitespace-nowrap">+ Row</button>
                     </div>
                 </div>
 
-                {/* 🔍 SEARCH BAR */}
-                <div className="relative w-full md:w-1/2">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">🔍</span>
+                {/* Search Bar */}
+                <div className="relative w-full">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
                     <input 
                         type="text" 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search any data..."
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={searchQuery} 
+                        onChange={(e) => setSearchQuery(e.target.value)} 
+                        placeholder="Search data..." 
+                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition text-sm"
                     />
                 </div>
             </div>
 
+            {/* Modals */}
             {isAddingColumn && (
-                <div className="bg-purple-50 p-4 rounded border border-purple-200 mb-6 flex gap-3 items-center animate-fade-in-down">
-                    <span className="font-bold text-purple-800">New Column Name:</span>
-                    <input type="text" value={newColumnName} onChange={(e) => setNewColumnName(e.target.value)} className="p-2 border rounded flex-1" placeholder="e.g. Email" />
-                    <button onClick={handleAddColumn} className="bg-purple-600 text-white px-4 py-2 rounded font-bold hover:bg-purple-700">Add</button>
-                    <button onClick={() => setIsAddingColumn(false)} className="text-gray-500 hover:text-red-500 px-2">Cancel</button>
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm animate-fade-in-down">
+                        <h3 className="font-bold text-lg mb-4 text-purple-800">Add New Column</h3>
+                        <input type="text" value={newColumnName} onChange={(e) => setNewColumnName(e.target.value)} className="w-full p-2 border rounded-lg mb-4" placeholder="Column Name" />
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => setIsAddingColumn(false)} className="px-4 py-2 bg-gray-200 rounded-lg text-sm">Cancel</button>
+                            <button onClick={handleAddColumn} className="px-4 py-2 bg-purple-600 text-white rounded-lg shadow text-sm">Add</button>
+                        </div>
+                    </div>
                 </div>
             )}
 
             {isAdding && (
-                <div className="bg-white p-6 rounded-lg shadow-md border border-blue-200 mb-8">
-                    <div className="flex justify-between items-center mb-4 border-b pb-2">
-                        <h3 className="font-bold text-lg text-gray-800">{editingId ? '✏️ Edit Row' : '➕ Add New Row'}</h3>
-                        <button onClick={() => setIsAdding(false)} className="text-gray-400 hover:text-red-500">✕</button>
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in-down">
+                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                            <h3 className="font-bold text-lg text-gray-800">{editingId ? '✏️ Edit Entry' : '➕ Add Entry'}</h3>
+                            <button onClick={() => setIsAdding(false)} className="text-gray-400 hover:text-red-500 text-xl">✕</button>
+                        </div>
+                        <form onSubmit={handleSave}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                {folder.fields.map((field) => (
+                                    <div key={field}>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wide">{field}</label>
+                                        <input type="text" value={formData[field] || ''} onChange={(e) => handleInputChange(field, e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder={`Enter ${field}`} />
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex gap-3 justify-end sticky bottom-0 bg-white pt-2 border-t">
+                                <button type="button" onClick={() => setIsAdding(false)} className="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-medium text-sm hover:bg-gray-300">Cancel</button>
+                                <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-700 font-bold text-sm">{editingId ? 'Update' : 'Save'}</button>
+                            </div>
+                        </form>
                     </div>
-                    <form onSubmit={handleSave}>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                            {folder.fields.map((field) => (
-                                <div key={field}>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1 uppercase tracking-wide">{field}</label>
-                                    <input type="text" value={formData[field] || ''} onChange={(e) => handleInputChange(field, e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder={`Enter ${field}`} />
-                                </div>
-                            ))}
-                        </div>
-                        <div className="flex gap-3 justify-end">
-                            <button type="button" onClick={() => setIsAdding(false)} className="bg-gray-200 text-gray-700 px-6 py-2 rounded hover:bg-gray-300 font-medium">Cancel</button>
-                            <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded shadow hover:bg-blue-700 font-bold">{editingId ? 'Update' : 'Save'}</button>
-                        </div>
-                    </form>
                 </div>
             )}
 
-            <div className="bg-white rounded shadow overflow-x-auto flex-1 border border-gray-200" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
-                {loading ? <LoadingSpinner /> : (
-                    <table className="w-full text-left border-collapse min-w-[800px]">
-                        <thead className="bg-gray-100 border-b shadow-sm sticky top-0 z-10">
-                            <tr>
-                                {folder.fields.map(f => (
-                                    <th key={f} className="p-4 whitespace-nowrap font-semibold text-gray-700 text-sm border-r border-gray-200 group bg-gray-100">
-                                        <div className="flex justify-between items-center gap-2">
-                                            <span>{f}</span>
-                                            <button onClick={() => handleDeleteColumn(f)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition font-bold" title="Delete Column">✕</button>
-                                        </div>
-                                    </th>
-                                ))}
-                                <th className="p-4 bg-gray-100 w-24 text-center font-bold text-gray-700 sticky right-0 shadow-[-5px_0_5px_-5px_rgba(0,0,0,0.1)] z-20">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {folderData.length > 0 ? (
-                                folderData.map(row => (
-                                    <tr key={row.id} className="border-b hover:bg-blue-50 transition group">
-                                        {folder.fields.map(f => (
-                                            <td key={f} className="p-3 text-sm text-gray-800 border-r border-gray-100 max-w-[200px] truncate" title={row[f]}>{row[f] || '-'}</td>
-                                        ))}
-                                        <td className="p-3 flex justify-center gap-3 sticky right-0 bg-white group-hover:bg-blue-50 shadow-[-5px_0_5px_-5px_rgba(0,0,0,0.1)]">
-                                            <button onClick={() => handleEdit(row)} className="text-blue-500 hover:text-blue-700 font-medium" title="Edit">✏️</button>
-                                            <button onClick={() => window.confirm("Delete this row?") && deleteDocument(row.id)} className="text-red-400 hover:text-red-600 font-medium" title="Delete">🗑️</button>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr><td colSpan={folder.fields.length + 1} className="p-10 text-center text-gray-400 italic">No data found.</td></tr>
-                            )}
-                        </tbody>
-                    </table>
-                )}
+            {/* Data Table */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 overflow-hidden flex flex-col">
+                <div className="overflow-x-auto flex-1 custom-scrollbar">
+                    {loading ? <LoadingSpinner /> : (
+                        <table className="w-full text-left border-collapse min-w-[800px]">
+                            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+                                <tr>
+                                    {folder.fields.map(f => (
+                                        <th key={f} className="p-3 whitespace-nowrap font-semibold text-gray-600 text-sm border-r border-gray-100 bg-gray-50 group">
+                                            <div className="flex justify-between items-center gap-2">
+                                                <span>{f}</span>
+                                                <button onClick={() => handleDeleteColumn(f)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition" title="Delete Column">✕</button>
+                                            </div>
+                                        </th>
+                                    ))}
+                                    <th className="p-3 bg-gray-50 w-24 text-center font-bold text-gray-600 sticky right-0 shadow-[-5px_0_10px_-5px_rgba(0,0,0,0.05)] z-20">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {folderData.length > 0 ? (
+                                    folderData.map(row => (
+                                        <tr key={row.id} className="hover:bg-blue-50/50 transition duration-150 group">
+                                            {folder.fields.map(f => (
+                                                <td key={f} className="p-3 text-sm text-gray-700 border-r border-gray-50 max-w-[200px] truncate" title={row[f]}>{row[f] || '-'}</td>
+                                            ))}
+                                            <td className="p-3 flex justify-center gap-3 sticky right-0 bg-white group-hover:bg-blue-50/50 shadow-[-5px_0_10px_-5px_rgba(0,0,0,0.05)]">
+                                                <button onClick={() => handleEdit(row)} className="text-blue-500 hover:text-blue-700 font-medium p-1 rounded hover:bg-blue-100" title="Edit">✏️</button>
+                                                <button onClick={() => window.confirm("Delete this row?") && deleteDocument(row.id)} className="text-red-400 hover:text-red-600 font-medium p-1 rounded hover:bg-red-100" title="Delete">🗑️</button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr><td colSpan={folder.fields.length + 1} className="p-10 text-center text-gray-400 italic bg-gray-50/30">No data found. Add a new row to get started.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -398,7 +414,7 @@ function OfficeData() {
 
     if (selectedSheet) return <FolderDataView folder={selectedSheet} onBack={() => setSelectedSheet(null)} />;
     if (selectedFile) return <FolderBrowser isRoot={false} parentId={selectedFile.id} parentName={selectedFile.name} onSelect={(item) => setSelectedSheet(item)} onBack={() => setSelectedFile(null)} />;
-    return <div className="min-h-screen bg-gray-50"><FolderBrowser isRoot={true} parentId="ROOT" parentName="Office Data" onSelect={(item) => { if (item.type === 'workbook') setSelectedFile(item); else setSelectedSheet(item); }} onBack={null} /></div>;
+    return <div className="min-h-screen bg-gray-100"><FolderBrowser isRoot={true} parentId="ROOT" parentName="Office Data" onSelect={(item) => { if (item.type === 'workbook') setSelectedFile(item); else setSelectedSheet(item); }} onBack={null} /></div>;
 }
 
 export default OfficeData;

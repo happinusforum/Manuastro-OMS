@@ -1,4 +1,4 @@
-// src/pages/admin/UserManagement.jsx (FINAL CODE - Sorted by EmpID)
+// src/pages/admin/UserManagement.jsx
 
 import React, { useState, useMemo } from 'react';
 import { createUserWithProfile, updateEmployeeProfile } from '../../api/EmployeeService'; 
@@ -24,7 +24,7 @@ function UserManagement() {
     // Fetch Data
     const { data: rawUsers, loading: loadingData, error: dataError, deleteDocument } = useFirestore('users'); 
 
-    // 💡 SORTING LOGIC ADDED HERE
+    // 💡 SORTING LOGIC (KEPT EXACTLY SAME)
     const users = useMemo(() => {
         if (!rawUsers) return [];
 
@@ -43,7 +43,7 @@ function UserManagement() {
         });
     }, [rawUsers]);
 
-    // --- CREATE LOGIC ---
+    // --- CREATE LOGIC (SAME) ---
     const handleCreateUser = async (e) => {
         e.preventDefault();
         setMessage('');
@@ -76,7 +76,7 @@ function UserManagement() {
         }
     };
     
-    // --- DELETE LOGIC ---
+    // --- DELETE LOGIC (SAME) ---
     const handleDeleteUser = async (userId, userEmail) => {
         if (window.confirm(`Are you sure you want to delete user: ${userEmail}?`)) {
              if (userId === auth.currentUser.uid) {
@@ -92,7 +92,7 @@ function UserManagement() {
          }
     };
     
-    // --- EDIT LOGIC ---
+    // --- EDIT LOGIC (SAME) ---
     const handleEditSetup = (user) => {
         setEditFormData({
             id: user.id,
@@ -110,7 +110,7 @@ function UserManagement() {
         setEditFormData({ ...editFormData, [e.target.name]: e.target.value });
     };
 
-    // --- UPDATE LOGIC ---
+    // --- UPDATE LOGIC (SAME) ---
     const handleUpdateUser = async (e) => {
         e.preventDefault();
         setLoadingForm(true);
@@ -132,93 +132,198 @@ function UserManagement() {
         }
     };
 
-    const inputStyle = { padding: '10px', margin: '5px', border: '1px solid #ccc', borderRadius: '4px', flexGrow: 1, minWidth: '120px' };
-    const buttonStyle = { backgroundColor: '#28a745', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', margin: '5px' };
-    const editButtonStyle = { backgroundColor: '#007bff', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', marginRight: '5px' };
+    // Helper for Role Badges
+    const getRoleBadgeColor = (role) => {
+        switch(role?.toLowerCase()) {
+            case 'admin': return 'bg-purple-100 text-purple-700 border-purple-200';
+            case 'hr': return 'bg-blue-100 text-blue-700 border-blue-200';
+            default: return 'bg-green-100 text-green-700 border-green-200';
+        }
+    };
 
     return (
-        <div style={{ display: 'flex', minHeight: '100vh' }}>
-            <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-                <main style={{ padding: '20px', backgroundColor: '#f4f7f9', flexGrow: 1 }}>
-                    <h2 style={{ borderBottom: '2px solid #ddd', paddingBottom: '10px' }}>Admin: User Management</h2>
-
-                    {/* Create User Form */}
-                    <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', marginBottom: '30px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                        <h3>Create New User (Full Profile)</h3>
-                        <form onSubmit={handleCreateUser} style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                            <input type="email" placeholder="Email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} required style={inputStyle} />
-                            <input type="password" placeholder="Password (min 6 chars)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required style={inputStyle} />
-                            <input type="text" placeholder="Full Name" value={newName} onChange={(e) => setNewName(e.target.value)} required style={inputStyle} />
-                            <input type="text" placeholder="Emp ID (e.g. MA/IT/001)" value={newEmpId} onChange={(e) => setNewEmpId(e.target.value)} required style={inputStyle} />
-                            <input type="tel" placeholder="Phone Number" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} style={inputStyle} />
-                            <select value={newRole} onChange={(e) => setNewRole(e.target.value)} style={{ ...inputStyle, minWidth: '150px' }}>
-                                <option value="employee">Employee</option>
-                                <option value="hr">HR</option>
-                                <option value="admin">Admin</option>
-                            </select>
-                            <button type="submit" disabled={loadingForm} style={{ ...buttonStyle, backgroundColor: loadingForm ? '#6c757d' : '#28a745' }}>
-                                {loadingForm ? 'Creating...' : 'Create User'}
-                            </button>
-                        </form>
-                        {message && <p style={{ marginTop: '10px', color: message.startsWith('Error') ? 'red' : 'green' }}>{message}</p>}
-                    </div>
-
-                    {/* User List */}
-                    <h3>Current Users (Total: {users ? users.length : 0})</h3>
-                    {loadingData && <LoadingSpinner message="Fetching user list..." size="40px" />} 
-                    {dataError && <p style={{ color: 'red', fontWeight: 'bold' }}>Error loading data: {dataError}</p>}
-
-                    {!loadingData && users && (
-                        <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                <thead>
-                                    <tr style={{ borderBottom: '2px solid #ddd' }}>
-                                        <th style={{ textAlign: 'left', padding: '10px' }}>Name</th>
-                                        <th style={{ textAlign: 'left', padding: '10px' }}>Emp ID</th>
-                                        <th style={{ textAlign: 'left', padding: '10px' }}>Email</th>
-                                        <th style={{ textAlign: 'left', padding: '10px' }}>Role</th>
-                                        <th style={{ textAlign: 'left', padding: '10px' }}>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users.map(user => (
-                                        <tr key={user.id} style={{ borderBottom: '1px solid #eee' }}>
-                                            <td style={{ padding: '10px' }}>{user.name || 'N/A'}</td> 
-                                            <td style={{ padding: '10px', fontWeight: 'bold', color: '#555' }}>{user.empId || 'N/A'}</td>
-                                            <td style={{ padding: '10px' }}>{user.email}</td>
-                                            <td style={{ padding: '10px', fontWeight: 'bold' }}>{user.role ? user.role.toUpperCase() : 'N/A'}</td>
-                                            <td style={{ padding: '10px' }}>
-                                                <button onClick={() => handleEditSetup(user)} style={editButtonStyle}>Edit</button>
-                                                <button onClick={() => handleDeleteUser(user.id, user.email)} disabled={user.id === auth.currentUser.uid || user.role === 'admin'} style={{ backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', opacity: (user.id === auth.currentUser.uid || user.role === 'admin') ? 0.5 : 1 }}>Delete</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </main>
+        <div className="min-h-screen bg-gray-50/50 p-6">
+            
+            {/* Header */}
+            <div className="mb-8">
+                <h2 className="text-2xl font-bold text-gray-800">User Management</h2>
+                <p className="text-sm text-gray-500 mt-1">Create, edit, and manage system access.</p>
             </div>
 
-            {/* Edit Modal */}
+            {/* --- CREATE USER CARD --- */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                        <span className="bg-blue-100 text-blue-600 p-1.5 rounded-lg">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+                        </span>
+                        Create New User
+                    </h3>
+                </div>
+
+                <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    <input type="email" placeholder="Email Address" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} required 
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                    
+                    <input type="password" placeholder="Password (min 6 chars)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required 
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                    
+                    <input type="text" placeholder="Full Name" value={newName} onChange={(e) => setNewName(e.target.value)} required 
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                    
+                    <input type="text" placeholder="Emp ID (e.g. MA/IT/001)" value={newEmpId} onChange={(e) => setNewEmpId(e.target.value)} required 
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                    
+                    <input type="tel" placeholder="Phone Number" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} 
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                    
+                    <select value={newRole} onChange={(e) => setNewRole(e.target.value)} 
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                    >
+                        <option value="employee">Employee</option>
+                        <option value="hr">HR</option>
+                        <option value="admin">Admin</option>
+                    </select>
+
+                    <button type="submit" disabled={loadingForm} 
+                        className={`md:col-span-1 lg:col-span-3 mt-2 px-6 py-2.5 font-medium rounded-lg text-white shadow-md transition-all flex justify-center items-center gap-2
+                        ${loadingForm ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 active:scale-95'}`}
+                    >
+                        {loadingForm ? 'Creating...' : '+ Create User'}
+                    </button>
+                </form>
+
+                {message && (
+                    <div className={`mt-4 p-3 rounded-lg text-sm font-medium ${message.startsWith('Error') ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
+                        {message}
+                    </div>
+                )}
+            </div>
+
+            {/* --- USER LIST TABLE --- */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                    <h3 className="font-bold text-gray-700">All Users</h3>
+                    <span className="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-1 rounded-full">Total: {users ? users.length : 0}</span>
+                </div>
+
+                {loadingData && <div className="p-8"><LoadingSpinner message="Fetching user list..." size="40px" /></div>} 
+                {dataError && <p className="p-8 text-red-500 text-center font-bold">Error loading data: {dataError}</p>}
+
+                {!loadingData && users && (
+                    <div className="overflow-x-auto">
+                        <table className="w-full whitespace-nowrap">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name / ID</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {users.map(user => (
+                                    <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="font-semibold text-gray-800">{user.name || 'Unknown'}</span>
+                                                <span className="text-xs text-gray-500 font-mono">{user.empId || 'No ID'}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-600">
+                                            <div>{user.email}</div>
+                                            <div className="text-xs text-gray-400">{user.phoneNumber}</div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)} uppercase tracking-wide`}>
+                                                {user.role}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right space-x-2">
+                                            <button onClick={() => handleEditSetup(user)} 
+                                                className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-xs font-medium transition-colors">
+                                                Edit
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDeleteUser(user.id, user.email)} 
+                                                disabled={user.id === auth.currentUser.uid || user.role === 'admin'} 
+                                                className={`px-3 py-1.5 rounded text-xs font-medium transition-colors
+                                                    ${(user.id === auth.currentUser.uid || user.role === 'admin') 
+                                                        ? 'text-gray-400 bg-gray-100 cursor-not-allowed' 
+                                                        : 'text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100'
+                                                    }`}
+                                            >
+                                                Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {/* --- EDIT MODAL --- */}
             {editingUser && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '500px', width: '90%', boxShadow: '0 8px 16px rgba(0,0,0,0.2)' }}>
-                        <h3>Edit User Profile: {editingUser.name || editingUser.email}</h3>
-                        <form onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
-                            <label>Name</label><input type="text" name="name" value={editFormData.name} onChange={handleEditChange} required style={inputStyle} />
-                            <label>Employee ID</label><input type="text" name="empId" value={editFormData.empId} onChange={handleEditChange} required style={inputStyle} />
-                            <label>Phone Number</label><input type="tel" name="phoneNumber" value={editFormData.phoneNumber} onChange={handleEditChange} style={inputStyle} />
-                            <label>Role</label>
-                            <select name="role" value={editFormData.role} onChange={handleEditChange} required style={inputStyle}>
-                                <option value="employee">Employee</option><option value="hr">HR</option><option value="admin">Admin</option>
-                            </select>
-                            <label>Address</label><textarea name="address" value={editFormData.address} onChange={handleEditChange} style={{ ...inputStyle, minHeight: '60px' }} />
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-                                <button type="button" onClick={() => setEditingUser(null)} style={{ ...buttonStyle, backgroundColor: '#6c757d' }}>Cancel</button>
-                                <button type="submit" disabled={loadingForm} style={{ ...buttonStyle, backgroundColor: '#007bff' }}>{loadingForm ? 'Updating...' : 'Save Changes'}</button>
-                            </div>
-                        </form>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
+                        <div className="bg-blue-600 px-6 py-4 flex justify-between items-center">
+                            <h3 className="text-white font-bold text-lg">Edit Profile</h3>
+                            <button onClick={() => setEditingUser(null)} className="text-blue-200 hover:text-white">✕</button>
+                        </div>
+                        
+                        <div className="p-6">
+                            <p className="text-sm text-gray-500 mb-4">Editing user: <span className="font-semibold text-gray-800">{editingUser.email}</span></p>
+                            
+                            <form onSubmit={handleUpdateUser} className="flex flex-col gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Full Name</label>
+                                    <input type="text" name="name" value={editFormData.name} onChange={handleEditChange} required 
+                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Emp ID</label>
+                                        <input type="text" name="empId" value={editFormData.empId} onChange={handleEditChange} required 
+                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Role</label>
+                                        <select name="role" value={editFormData.role} onChange={handleEditChange} required 
+                                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                            <option value="employee">Employee</option>
+                                            <option value="hr">HR</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Phone</label>
+                                    <input type="tel" name="phoneNumber" value={editFormData.phoneNumber} onChange={handleEditChange} 
+                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Address</label>
+                                    <textarea name="address" value={editFormData.address} onChange={handleEditChange} rows="2"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-100">
+                                    <button type="button" onClick={() => setEditingUser(null)} 
+                                        className="px-4 py-2 rounded text-gray-600 hover:bg-gray-100 font-medium transition-colors">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" disabled={loadingForm} 
+                                        className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-colors disabled:bg-blue-400">
+                                        {loadingForm ? 'Saving...' : 'Save Changes'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
             )}

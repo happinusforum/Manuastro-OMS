@@ -1,6 +1,6 @@
-// src/App.jsx (FINAL LAYOUT FIX - Fixed Sidebar, Scrollable Content)
+// src/App.jsx
 
-import React from 'react';
+import React, { useState } from 'react'; // ⬅️ useState import kiya
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 
@@ -22,45 +22,61 @@ import MonthlyLeaveReport from './pages/hr/MonthlyLeaveReport';
 import YearlyPayoffReport from './pages/hr/YearlyPayoffReport';
 import SharedDocs from './components/common/SharedDocs';
 import MyLeaveStatus from './pages/employee/MyLeaveStatus';
+
 // Components
 import AuthGuard from './components/auth/AuthGuard'; 
-// ⬅️ NEW IMPORTS: Global Components yahan import karo
 import Sidebar from './components/common/Sidebar';
 import Header from './components/common/Header';
 import OfficeData from './components/common/OfficeData';
+import LoadingSpinner from './components/common/LoadingSpinner';
 
 function App() {
     const { loading, currentUser } = useAuth(); 
+    
+    // 🛠️ STATE LIFTING: Sidebar ka state ab yahan manage hoga
+    // Default: Desktop (>768px) pe open, Mobile pe closed
+    const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
+
+    const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
     if (loading) {
-        return <div style={{ display: 'flex', justifyContent: 'center', marginTop: '50px' }}>Loading Application...</div>; 
+        return (
+            <div className="flex items-center justify-center h-screen bg-gray-50">
+                <LoadingSpinner message="Initializing OMS..." size="50px" />
+            </div>
+        ); 
     }
 
     return (
-        // 🛠️ FIX 1: 'minHeight' hata kar 'height: 100vh' aur 'overflow: hidden'
-        // Isse poora page screen size pe lock ho jayega
-        <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+        // 🛠️ MAIN LAYOUT CONTAINER
+        // h-screen & overflow-hidden: Prevent full page scroll
+        <div className="flex h-screen overflow-hidden bg-gray-50">
             
-            {/* 🌟 PERSISTENT SIDEBAR */}
-            {currentUser && <Sidebar />}
+            {/* 🌟 SIDEBAR (Fixed Position in its own file) */}
+            {currentUser && (
+                <Sidebar 
+                    isOpen={isSidebarOpen} 
+                    toggleSidebar={toggleSidebar} 
+                />
+            )}
 
-            {/* Right Side Container (Header + Content) */}
-            {/* 🛠️ FIX 2: 'height: 100%' aur 'overflow: hidden' add kiya */}
-            <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            {/* 🌟 RIGHT CONTENT CONTAINER 
+               - Agar Sidebar Open hai: 'md:ml-64' (Jagah chodega)
+               - Agar Sidebar Closed hai: 'md:ml-0' (Jagah nahi chodega, full width)
+               transition-all -> Smooth resize agar future me sidebar toggle logic add kiya.
+            */}
+            <div className={`flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 
+                ${currentUser && isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}
+            >
                 
-                {/* 🌟 PERSISTENT HEADER */}
-                {currentUser && <Header />}
+                {/* 🌟 HEADER (Sticky/Fixed handled inside Header component or here) */}
+                {currentUser && <Header toggleSidebar={toggleSidebar} />}
 
-                {/* Main Content Area */}
-                {/* 🛠️ FIX 3: 'overflowY: auto' aur 'height: 100%' 
-                   Isse sirf ye safed wala hissa scroll karega, sidebar nahi hilega */}
-                <main style={{ 
-                    padding: '20px', 
-                    backgroundColor: '#f4f7f9', 
-                    flexGrow: 1, 
-                    overflowY: 'auto', 
-                    height: '100%' 
-                }}>
+                {/* 🌟 MAIN SCROLLABLE AREA 
+                   flex-1 -> Baki bachi hui height le lega.
+                   overflow-y-auto -> Sirf ye area scroll karega.
+                */}
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50/50 relative">
                     <Routes>
                         {/* Public Routes */}
                         <Route path="/" element={!currentUser ? <LoginPage /> : <Navigate to="/employee/dashboard" />} />
@@ -72,8 +88,7 @@ function App() {
                         <Route path="/admin/dashboard" element={<AuthGuard allowedRoles={['admin']}><AdminDashboard /></AuthGuard>} />
                         <Route path="/admin/user-management" element={<AuthGuard allowedRoles={['admin']}><UserManagement /></AuthGuard>} />
                         <Route path="/office-data" element={<AuthGuard allowedRoles={['admin', 'hr', 'employee']}> <OfficeData /></AuthGuard>}/>
-                        // Protected Route ke andar:
-<Route path="/shared-docs" element={<AuthGuard allowedRoles={['admin', 'employee', 'hr']}><SharedDocs /></AuthGuard>} />
+                        <Route path="/shared-docs" element={<AuthGuard allowedRoles={['admin', 'employee', 'hr']}><SharedDocs /></AuthGuard>} />
                         
                         {/* 2. HR Routes */}
                         <Route path="/hr/yearly-payoff" element={<AuthGuard allowedRoles={['hr', 'admin']}><YearlyPayoffReport /></AuthGuard>} />
