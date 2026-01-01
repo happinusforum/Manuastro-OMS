@@ -1,12 +1,13 @@
-// src/components/common/SharedDocs.jsx (FIXED: CONTROLLED INPUT ERROR)
+// src/components/common/SharedDocs.jsx (MODERN UI & RESPONSIVE WITH EXCEL EDITOR)
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useFirestore } from '../../hooks/useFirestore';
 import { useAuth } from '../../context/AuthContext'; 
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import * as XLSX from 'xlsx';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore'; 
+import { collection, query, where, getDocs, updateDoc, doc, writeBatch, addDoc } from 'firebase/firestore'; 
 import { db } from '../../Firebase'; 
+import ExcelEditor from './ExcelEditor'; // 🟢 Import ExcelEditor
 
 // ----------------------------------------------------------------------
 // 👥 USER SELECTION MODAL
@@ -363,9 +364,131 @@ const FolderDataView = ({ folder, onBack }) => {
     const [formData, setFormData] = useState({});
     const [editingId, setEditingId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [showExcelEditor, setShowExcelEditor] = useState(false); // 🟢 State for Heavy Editor
 
     const dataFilters = useMemo(() => [['folderId', '==', folder.id]], [folder.id]);
     const { data: rawFolderData, loading, addDocument, updateDocument, deleteDocument } = useFirestore('shared_data', dataFilters);
+
+    // 🌟 1. Prepare Data for ExcelEditor (Load Logic)
+    const excelInitialData = useMemo(() => {
+        if (!rawFolderData || !folder.fields) return [];
+
+        const celldata = [];
+        
+        // A. Add Headers (Row 0)
+        folder.fields.forEach((field, colIndex) => {
+            celldata.push({
+                r: 0, 
+                c: colIndex, 
+                v: { 
+                    v: field, 
+                    m: field, 
+                    ct: { fa: "General", t: "g" },
+                    bg: "#f3f4f6", // Light gray background for header
+                    bl: 1, // Bold
+                }
+            });
+        });
+
+        // B. Add Data Rows (Row 1+)
+        rawFolderData.forEach((row, rowIndex) => {
+            folder.fields.forEach((field, colIndex) => {
+                const value = row[field] !== undefined ? row[field] : ""; // Handle empty cells
+                celldata.push({
+                    r: rowIndex + 1, // Start from row 1
+                    c: colIndex,
+                    v: { 
+                        v: value, 
+                        m: String(value), 
+                        ct: { fa: "General", t: "g" } 
+                    }
+                });
+            });
+        });
+
+        return [{
+            name: "Sheet1",
+            celldata: celldata
+        }];
+    }, [rawFolderData, folder.fields]);
+
+    // 🌟 2. Save Data from ExcelEditor (Save Logic)
+    const handleExcelSave = async (allSheets) => {
+        if (!allSheets || allSheets.length === 0) return;
+
+        // Note: Hum sirf 1st sheet ka data process kar rahe hain for simplicity
+        const sheetData = allSheets[0].data; 
+        if (!sheetData) return;
+
+        try {
+            // A. Extract Headers (Row 0)
+            const newFields = [];
+            // Assuming max 20 columns scanned, or scan until null
+            const headerRow = sheetData[0];
+            if(headerRow) {
+                for(let c = 0; c < headerRow.length; c++) {
+                    const cell = headerRow[c];
+                    if(cell && cell.v) {
+                        newFields.push(String(cell.v)); // Column names
+                    } else {
+                        break; // Stop at first empty header
+                    }
+                }
+            }
+
+            if (newFields.length === 0) {
+                alert("Error: First row (Headers) cannot be empty.");
+                return;
+            }
+
+            // B. Extract Data Rows (Row 1 to End)
+            const newRows = [];
+            for(let r = 1; r < sheetData.length; r++) {
+                const row = sheetData[r];
+                if(!row) continue;
+
+                const rowObject = { folderId: folder.id, createdAt: new Date(), _sortIndex: r };
+                let hasData = false;
+
+                newFields.forEach((field, cIndex) => {
+                    const cell = row[cIndex];
+                    if(cell && (cell.v !== null && cell.v !== undefined)) {
+                        rowObject[field] = cell.v;
+                        hasData = true;
+                    }
+                });
+
+                if(hasData) newRows.push(rowObject);
+            }
+
+            // C. BATCH UPDATE FIRESTORE (Delete Old -> Create New)
+            const batch = writeBatch(db);
+
+            // 1. Delete ALL existing docs in this folder
+            rawFolderData.forEach(docData => {
+                const docRef = doc(db, 'shared_data', docData.id);
+                batch.delete(docRef);
+            });
+
+            // 2. Create NEW docs
+            newRows.forEach(row => {
+                const newDocRef = doc(collection(db, "shared_data")); // Auto ID
+                batch.set(newDocRef, row);
+            });
+
+            // 3. Update Folder Fields
+            const folderRef = doc(db, 'shared_folders', folder.id);
+            batch.update(folderRef, { fields: newFields });
+
+            await batch.commit();
+            setShowExcelEditor(false);
+            alert("✅ Database synced successfully with Excel Data!");
+
+        } catch (error) {
+            console.error("Sync Error:", error);
+            alert("Failed to save changes: " + error.message);
+        }
+    };
 
     const folderData = useMemo(() => {
         if (!rawFolderData) return [];
@@ -412,6 +535,14 @@ const FolderDataView = ({ folder, onBack }) => {
                         <div><h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">📄 {folder.name}</h2><span className="text-[10px] uppercase bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded font-bold">Shared Sheet</span></div>
                     </div>
                     <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                        {/* 🟢 NEW: Button to Open Advanced Editor */}
+                        <button 
+                            onClick={() => setShowExcelEditor(true)}
+                            className="bg-gray-800 text-white px-3 py-1.5 rounded-lg shadow hover:bg-gray-900 text-sm whitespace-nowrap font-medium flex items-center gap-2"
+                        >
+                            <span>⚡</span> Advanced Mode
+                        </button>
+
                         <button onClick={handleDownloadExcel} className="bg-green-600 text-white px-3 py-1.5 rounded-lg shadow hover:bg-green-700 text-sm whitespace-nowrap">📊 Export</button>
                         <button onClick={() => setIsAddingColumn(true)} className="bg-purple-600 text-white px-3 py-1.5 rounded-lg shadow hover:bg-purple-700 text-sm whitespace-nowrap">+ Column</button>
                         <button onClick={() => { setIsAdding(true); setEditingId(null); setFormData({}); }} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow hover:bg-blue-700 text-sm whitespace-nowrap">+ Row</button>
@@ -419,6 +550,15 @@ const FolderDataView = ({ folder, onBack }) => {
                 </div>
                 <div className="relative w-full"><span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span><input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition text-sm" /></div>
             </div>
+
+            {/* 🟢 Render Excel Editor if Toggled */}
+            {showExcelEditor && (
+                <ExcelEditor 
+                    initialData={excelInitialData} // 🚀 Pass Transformed Data
+                    onSave={handleExcelSave}       // 🚀 Pass Save Handler
+                    onClose={() => setShowExcelEditor(false)}
+                />
+            )}
 
             {isAddingColumn && <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm animate-fade-in-down"><h3 className="font-bold text-lg mb-4 text-purple-800">Add New Column</h3><input type="text" value={newColumnName} onChange={(e) => setNewColumnName(e.target.value)} className="w-full p-2 border rounded-lg mb-4" placeholder="Column Name" /><div className="flex justify-end gap-3"><button onClick={() => setIsAddingColumn(false)} className="px-4 py-2 bg-gray-200 rounded-lg text-sm">Cancel</button><button onClick={handleAddColumn} className="px-4 py-2 bg-purple-600 text-white rounded-lg shadow text-sm">Add</button></div></div></div>}
 
