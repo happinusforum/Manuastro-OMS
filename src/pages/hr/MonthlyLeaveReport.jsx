@@ -12,7 +12,7 @@ function MonthlyLeaveReport() {
     const employeeFilters = useMemo(() => [['role', '==', 'employee']], []);
     const { data: rawEmployees } = useFirestore('users', employeeFilters);
 
-    // 🔥 SORTED EMPLOYEES LIST (UNCHANGED)
+    // 🔥 SORTED EMPLOYEES LIST
     const employees = useMemo(() => {
         if (!rawEmployees) return [];
         return [...rawEmployees].sort((a, b) => {
@@ -30,24 +30,39 @@ function MonthlyLeaveReport() {
         selectedEmployeeId ? [['userId', '==', selectedEmployeeId]] : null, 
     [selectedEmployeeId]);
 
-    const { data: allLeaves, loading } = useFirestore('leaves', leavesFilters);
+    const { data: allRequests, loading } = useFirestore('leaves', leavesFilters);
 
-    // 3. 🧠 SMART LOGIC: Process Data & Expand Date Ranges (UNCHANGED)
+    // 3. 🧠 SMART LOGIC: Process Data & Expand Date Ranges
     const reportData = useMemo(() => {
-        if (!allLeaves || !selectedMonth) return { days: [], stats: {} };
+        if (!allRequests || !selectedMonth) return { days: [], stats: {} };
 
         const targetMonth = selectedMonth; 
         let processedDays = [];
         
         // Stats Counters
-        let stats = { Sick: 0, Casual: 0, Earned: 0, Unpaid: 0, Total: 0 };
+        let stats = { Sick: 0, Casual: 0, Earned: 0, Unpaid: 0, Travel: 0, TotalOff: 0 };
 
-        // Filter APPROVED leaves only
-        const approvedLeaves = allLeaves.filter(l => l.status === 'Approved');
+        // Filter APPROVED items only (Leaves and Travel)
+        const approvedItems = allRequests.filter(req => 
+            req.status === 'Approved' && 
+            (req.type === 'leave' || req.type === 'travel')
+        );
 
-        approvedLeaves.forEach(leave => {
-            let current = new Date(leave.startDate);
-            const end = new Date(leave.endDate);
+        approvedItems.forEach(req => {
+            let current = new Date(req.startDate);
+            const end = new Date(req.endDate);
+
+            // Determine Label & Category
+            let displayType = 'Unknown';
+            let categoryKey = 'Other';
+
+            if (req.type === 'travel') {
+                displayType = req.travelType || 'Travel'; 
+                categoryKey = 'Travel';
+            } else {
+                displayType = req.leaveType || 'Leave'; 
+                categoryKey = displayType.split(' ')[0]; 
+            }
 
             // Date Range Loop
             while (current <= end) {
@@ -55,22 +70,23 @@ function MonthlyLeaveReport() {
                 
                 // If date matches selected month
                 if (dateStr.startsWith(targetMonth)) {
-                    // Normalize type string to match stats keys (e.g., "Sick Leave" -> "Sick")
-                    const typeKey = leave.leaveType.split(' ')[0]; 
-
+                    
                     processedDays.push({
                         date: dateStr,
-                        type: leave.leaveType,
-                        reason: leave.reason,
-                        status: leave.status
+                        type: displayType, 
+                        category: req.type, 
+                        reason: req.reason,
+                        status: req.status
                     });
 
-                    if (stats[typeKey] !== undefined) stats[typeKey]++;
-                    else {
-                        // Fallback if type doesn't match standard keys
-                        stats[typeKey] = (stats[typeKey] || 0) + 1;
+                    // Update Counters
+                    if (categoryKey === 'Travel') {
+                        stats.Travel++;
+                    } else {
+                        if (stats[categoryKey] !== undefined) stats[categoryKey]++;
+                        else stats[categoryKey] = (stats[categoryKey] || 0) + 1;
+                        stats.TotalOff++; 
                     }
-                    stats.Total++;
                 }
                 current.setDate(current.getDate() + 1);
             }
@@ -81,9 +97,9 @@ function MonthlyLeaveReport() {
 
         return { days: processedDays, stats };
 
-    }, [allLeaves, selectedMonth]);
+    }, [allRequests, selectedMonth]);
 
-    // 4. CSV Export Function (UNCHANGED)
+    // 4. CSV Export Function
     const exportToCSV = () => {
         if (!reportData.days.length) {
             alert("No data to export!");
@@ -91,15 +107,16 @@ function MonthlyLeaveReport() {
         }
 
         const empName = employees?.find(e => e.uid === selectedEmployeeId)?.name || 'Employee';
-        const headers = ["Date", "Day", "Leave Type", "Reason", "Status"];
+        const headers = ["Date", "Day", "Category", "Type", "Reason", "Status"];
 
         const rows = reportData.days.map(record => {
             const dayName = new Date(record.date).toLocaleDateString('en-US', { weekday: 'short' });
             return [
                 record.date, 
                 dayName, 
+                record.category === 'travel' ? 'Travel/OD' : 'Leave',
                 record.type, 
-                `"${record.reason.replace(/"/g, '""')}"`, // Escape quotes
+                `"${record.reason.replace(/"/g, '""')}"`, 
                 record.status
             ];
         });
@@ -110,7 +127,7 @@ function MonthlyLeaveReport() {
         const url = URL.createObjectURL(blob);
         
         link.setAttribute('href', url);
-        link.setAttribute('download', `Leaves_${empName}_${selectedMonth}.csv`);
+        link.setAttribute('download', `Report_${empName}_${selectedMonth}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
@@ -118,13 +135,13 @@ function MonthlyLeaveReport() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50/50 p-6">
+        <div className="min-h-screen bg-gray-50/50 dark:bg-gray-900 p-6 transition-colors duration-300">
             
             {/* --- HEADER --- */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Leave Reports</h2>
-                    <p className="text-sm text-gray-500 mt-1">Detailed monthly leave analysis and export.</p>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Monthly Report</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Attendance analysis for Leaves & Travel.</p>
                 </div>
                 
                 {reportData.days.length > 0 && (
@@ -139,16 +156,16 @@ function MonthlyLeaveReport() {
             </div>
 
             {/* --- FILTERS TOOLBAR --- */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-8 flex flex-col md:flex-row gap-4 items-end">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-8 flex flex-col md:flex-row gap-4 items-end transition-colors duration-300">
                 
                 {/* Employee Selector */}
                 <div className="w-full md:w-1/3">
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Select Employee</label>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Select Employee</label>
                     <div className="relative">
                         <select 
                             value={selectedEmployeeId}
                             onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"
+                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer text-gray-900 dark:text-white"
                         >
                             <option value="" disabled>-- Choose Employee --</option>
                             {employees?.map(emp => (
@@ -157,18 +174,18 @@ function MonthlyLeaveReport() {
                                 </option>
                             ))}
                         </select>
-                        <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-500">▼</div>
+                        <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-500 dark:text-gray-400">▼</div>
                     </div>
                 </div>
 
                 {/* Month Selector */}
                 <div className="w-full md:w-1/4">
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Select Month</label>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Select Month</label>
                     <input 
                         type="month" 
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white dark:[color-scheme:dark]"
                     />
                 </div>
             </div>
@@ -176,26 +193,31 @@ function MonthlyLeaveReport() {
             {/* --- REPORT CONTENT --- */}
             {selectedEmployeeId ? (
                 loading ? (
-                    <div className="py-20"><LoadingSpinner message="Analysing Leaves..." size="40px" /></div>
+                    <div className="py-20"><LoadingSpinner message="Analysing Data..." size="40px" /></div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         
                         {/* LEFT: SUMMARY CARD (Sticky) */}
                         <div className="lg:col-span-1">
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-6">
-                                <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                    📊 Leave Summary
+                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 sticky top-6 transition-colors duration-300">
+                                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
+                                    📊 Monthly Stats
                                 </h3>
                                 
                                 <div className="space-y-4">
-                                    <StatRow label="Sick Leave" value={reportData.stats.Sick} icon="🤒" color="text-red-600" bg="bg-red-50" />
-                                    <StatRow label="Casual Leave" value={reportData.stats.Casual} icon="🏠" color="text-yellow-600" bg="bg-yellow-50" />
-                                    <StatRow label="Earned Leave" value={reportData.stats.Earned} icon="🌴" color="text-green-600" bg="bg-green-50" />
-                                    <StatRow label="Unpaid Leave" value={reportData.stats.Unpaid} icon="💸" color="text-gray-600" bg="bg-gray-50" />
+                                    <StatRow label="Sick Leave" value={reportData.stats.Sick} icon="🤒" color="text-red-600 dark:text-red-400" bg="bg-red-50 dark:bg-red-900/20" />
+                                    <StatRow label="Casual Leave" value={reportData.stats.Casual} icon="🏠" color="text-yellow-600 dark:text-yellow-400" bg="bg-yellow-50 dark:bg-yellow-900/20" />
+                                    <StatRow label="Earned Leave" value={reportData.stats.Earned} icon="🌴" color="text-green-600 dark:text-green-400" bg="bg-green-50 dark:bg-green-900/20" />
+                                    <StatRow label="Unpaid Leave" value={reportData.stats.Unpaid} icon="💸" color="text-gray-600 dark:text-gray-400" bg="bg-gray-50 dark:bg-gray-700/50" />
                                     
-                                    <div className="pt-4 mt-2 border-t border-gray-100 flex justify-between items-center">
-                                        <span className="font-bold text-gray-700">Total Days Off</span>
-                                        <span className="font-mono font-bold text-lg text-gray-900">{reportData.stats.Total}</span>
+                                    <div className="my-4 border-b border-gray-100 dark:border-gray-700"></div>
+                                    
+                                    {/* Travel Stat */}
+                                    <StatRow label="Travel / OD" value={reportData.stats.Travel} icon="✈️" color="text-purple-600 dark:text-purple-400" bg="bg-purple-50 dark:bg-purple-900/20" />
+
+                                    <div className="pt-4 mt-2 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                                        <span className="font-bold text-gray-700 dark:text-gray-300">Total Leaves Taken</span>
+                                        <span className="font-mono font-bold text-lg text-gray-900 dark:text-white">{reportData.stats.TotalOff}</span>
                                     </div>
                                 </div>
                             </div>
@@ -203,41 +225,41 @@ function MonthlyLeaveReport() {
 
                         {/* RIGHT: DETAILED TABLE */}
                         <div className="lg:col-span-2">
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors duration-300">
                                 <div className="overflow-x-auto">
                                     <table className="w-full whitespace-nowrap text-left">
-                                        <thead className="bg-gray-50 border-b border-gray-100">
+                                        <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
                                             <tr>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Date</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Day</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Type</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Reason</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Date</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Day</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Type</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Reason</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Status</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-100">
+                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                             {reportData.days.length > 0 ? (
                                                 reportData.days.map((record, index) => (
-                                                    <tr key={index} className="hover:bg-gray-50 transition-colors">
-                                                        <td className="px-6 py-4 font-medium text-gray-800">{record.date}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-500">
+                                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                        <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-200">{record.date}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                                                             {new Date(record.date).toLocaleDateString('en-US', { weekday: 'long' })}
                                                         </td>
                                                         <td className="px-6 py-4">
-                                                            <TypeBadge type={record.type} />
+                                                            <TypeBadge type={record.type} category={record.category} />
                                                         </td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600 truncate max-w-[150px]" title={record.reason}>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 truncate max-w-[150px]" title={record.reason}>
                                                             {record.reason}
                                                         </td>
                                                         <td className="px-6 py-4">
-                                                            <span className="bg-green-100 text-green-700 border border-green-200 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wide">Approved</span>
+                                                            <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wide">Approved</span>
                                                         </td>
                                                     </tr>
                                                 ))
                                             ) : (
                                                 <tr>
-                                                    <td colSpan="5" className="p-12 text-center text-gray-400 italic">
-                                                        No approved leaves found in this month.
+                                                    <td colSpan="5" className="p-12 text-center text-gray-400 dark:text-gray-500 italic">
+                                                        No approved leaves or travel in this month.
                                                     </td>
                                                 </tr>
                                             )}
@@ -249,10 +271,10 @@ function MonthlyLeaveReport() {
                     </div>
                 )
             ) : (
-                <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border-2 border-dashed border-gray-200">
+                <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 transition-colors duration-300">
                     <span className="text-4xl mb-4">👆</span>
-                    <h3 className="text-lg font-bold text-gray-700">Select an Employee</h3>
-                    <p className="text-gray-500">Choose an employee to view their detailed leave breakdown.</p>
+                    <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Select an Employee</h3>
+                    <p className="text-gray-500 dark:text-gray-400">Choose an employee to view their detailed activity.</p>
                 </div>
             )}
         </div>
@@ -264,25 +286,34 @@ const StatRow = ({ label, value, icon, color, bg }) => (
     <div className={`flex justify-between items-center p-3 rounded-lg ${bg}`}>
         <div className="flex items-center gap-3">
             <span>{icon}</span>
-            <span className="text-sm font-medium text-gray-700">{label}</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
         </div>
         <span className={`font-bold text-lg ${color}`}>{value || 0}</span>
     </div>
 );
 
-const TypeBadge = ({ type }) => {
-    // Extract base type e.g., "Sick Leave" -> "Sick"
+const TypeBadge = ({ type, category }) => {
+    // Determine Style based on Category (Leave vs Travel)
+    if (category === 'travel') {
+        return (
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold border bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800">
+                ✈️ {type}
+            </span>
+        );
+    }
+
+    // Default Leave Styles
     const baseType = type ? type.split(' ')[0] : 'Unknown';
     const colors = {
-        'Sick': 'bg-red-100 text-red-700 border-red-200',
-        'Casual': 'bg-yellow-100 text-yellow-700 border-yellow-200',
-        'Annual': 'bg-blue-100 text-blue-700 border-blue-200',
-        'Earned': 'bg-green-100 text-green-700 border-green-200',
-        'Unpaid': 'bg-gray-100 text-gray-700 border-gray-200'
+        'Sick': 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800',
+        'Casual': 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800',
+        'Annual': 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+        'Earned': 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
+        'Unpaid': 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600'
     };
     
     return (
-        <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${colors[baseType] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+        <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${colors[baseType] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600'}`}>
             {type}
         </span>
     );

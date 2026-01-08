@@ -1,15 +1,18 @@
 // src/pages/employee/EmployeeDashboard.jsx
 
 import React, { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom'; // ⬅️ UX: Navigation ke liye add kiya
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext'; 
 import { useFirestore } from '../../hooks/useFirestore'; 
 import { formatDistanceToNow } from 'date-fns'; 
 import LoadingSpinner from '../../components/common/LoadingSpinner'; 
 
+// Icons
+import { Calendar, CheckSquare, Briefcase, Activity, Clock, ArrowRight, Plane } from 'lucide-react';
+
 function EmployeeDashboard() {
     const { currentUser, userProfile, loading: authLoading } = useAuth();
-    const navigate = useNavigate(); // For button click
+    const navigate = useNavigate();
     const userId = currentUser ? currentUser.uid : null;
 
     const employeeProfile = userProfile;
@@ -59,146 +62,149 @@ function EmployeeDashboard() {
 
     }, [employeeProfile, userTasks, tasksLoading, profileLoading]);
 
-    // --- HELPER: Icons for Cards ---
-    const getIcon = (type) => {
-        switch(type) {
-            case 'leaves': return <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
-            case 'tasks': return <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-            case 'projects': return <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>;
-            case 'activity': return <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
-            default: return null;
-        }
-    };
-
     return (
-        <div className="min-h-screen bg-gray-50/50 p-6">
+        <div className="min-h-screen bg-gray-50/30 dark:bg-gray-900 p-6 md:p-8 transition-colors duration-300">
             
             {/* --- HEADER SECTION --- */}
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold text-gray-800">My Dashboard</h1>
-                <div className="flex flex-col sm:flex-row sm:items-center text-sm text-gray-500 mt-1 gap-2 sm:gap-4">
-                    <span>Welcome back, <span className="font-semibold text-blue-600">{employeeProfile?.name || 'User'}</span></span>
-                    <span className="hidden sm:inline text-gray-300">|</span>
-                    <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono">ID: {employeeProfile?.empId || 'N/A'}</span>
-                    <span className="hidden sm:inline text-gray-300">|</span>
-                    <span className="uppercase text-xs font-bold tracking-wider bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100">
-                        {employeeProfile?.role || 'Employee'}
-                    </span>
+            <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Dashboard</h1>
+                    <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mt-2 gap-3">
+                        <span className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-1 rounded-full shadow-sm">
+                            ID: <span className="font-mono font-medium text-gray-700 dark:text-gray-300">{employeeProfile?.empId || '...'}</span>
+                        </span>
+                        <span className="px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 text-xs font-bold uppercase tracking-wider">
+                            {employeeProfile?.role || 'Employee'}
+                        </span>
+                    </div>
+                </div>
+                <div className="text-right hidden md:block">
+                    <p className="text-sm text-gray-400 dark:text-gray-500">Current Date</p>
+                    <p className="text-lg font-semibold text-gray-700 dark:text-gray-200">
+                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    </p>
                 </div>
             </div>
 
             {/* --- LOADING STATE --- */}
             {(profileLoading || tasksLoading) ? (
-                <div className="flex justify-center items-center h-48">
-                    <LoadingSpinner message="Syncing your data..." size="40px" />
+                <div className="flex justify-center items-center h-64 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <LoadingSpinner message="Syncing your dashboard..." size="40px" />
                 </div>
             ) : (
-                <>
-                    {/* --- STATS CARDS --- */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="space-y-8">
+                    
+                    {/* --- STATS CARDS GRID --- */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         
-                        {/* 1. Leaves */}
-                        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Leave Balance</p>
-                                    <h3 className="text-2xl font-bold text-gray-800 mt-1">{employeeStats.leaves}</h3>
+                        {/* 1. Leave Balance */}
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all hover:-translate-y-1 group">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 transition-colors">
+                                    <Plane size={24} />
                                 </div>
-                                <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
-                                    {getIcon('leaves')}
-                                </div>
+                                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-lg">Paid Leave</span>
                             </div>
-                            <p className="text-xs text-gray-500 mt-3">Paid leaves remaining</p>
+                            <div>
+                                <h3 className="text-3xl font-bold text-gray-800 dark:text-white">{employeeStats.leaves}</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1">Days Remaining</p>
+                            </div>
                         </div>
 
                         {/* 2. Pending Tasks */}
-                        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pending Tasks</p>
-                                    <h3 className="text-2xl font-bold text-gray-800 mt-1">{employeeStats.pendingTasks}</h3>
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all hover:-translate-y-1 group">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="p-3 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-xl group-hover:bg-orange-100 dark:group-hover:bg-orange-900/30 transition-colors">
+                                    <CheckSquare size={24} />
                                 </div>
-                                <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
-                                    {getIcon('tasks')}
-                                </div>
+                                <span className="text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-lg">Action Needed</span>
                             </div>
-                            <p className="text-xs text-gray-500 mt-3">Need attention</p>
+                            <div>
+                                <h3 className="text-3xl font-bold text-gray-800 dark:text-white">{employeeStats.pendingTasks}</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1">Pending Tasks</p>
+                            </div>
                         </div>
 
-                        {/* 3. Projects */}
-                        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Active Projects</p>
-                                    <h3 className="text-2xl font-bold text-gray-800 mt-1">{employeeStats.totalProjects}</h3>
+                        {/* 3. Active Projects */}
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all hover:-translate-y-1 group">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
+                                    <Briefcase size={24} />
                                 </div>
-                                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                                    {getIcon('projects')}
-                                </div>
+                                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-lg">Ongoing</span>
                             </div>
-                            <p className="text-xs text-gray-500 mt-3">Assigned to you</p>
+                            <div>
+                                <h3 className="text-3xl font-bold text-gray-800 dark:text-white">{employeeStats.totalProjects}</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1">Active Projects</p>
+                            </div>
                         </div>
 
-                        {/* 4. Activity */}
-                        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Last Activity</p>
-                                    <h3 className="text-lg font-bold text-gray-800 mt-1 leading-tight">{employeeStats.lastActivity}</h3>
+                        {/* 4. Last Activity */}
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all hover:-translate-y-1 group">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-xl group-hover:bg-purple-100 dark:group-hover:bg-purple-900/30 transition-colors">
+                                    <Activity size={24} />
                                 </div>
-                                <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
-                                    {getIcon('activity')}
-                                </div>
+                                <span className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded-lg">System</span>
                             </div>
-                            <p className="text-xs text-gray-500 mt-3">System Interaction</p>
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-800 dark:text-white truncate" title={employeeStats.lastActivity}>{employeeStats.lastActivity}</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1">Last Interaction</p>
+                            </div>
                         </div>
                     </div>
 
-                    {/* --- UPCOMING TASKS SECTION --- */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Main Task List */}
-                        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                <h3 className="font-bold text-gray-700">Upcoming Deadlines</h3>
+                    {/* --- MAIN CONTENT SECTION --- */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        
+                        {/* LEFT: UPCOMING TASKS LIST */}
+                        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/30 dark:bg-gray-700/20">
+                                <div className="flex items-center gap-2">
+                                    <Calendar className="text-indigo-500 dark:text-indigo-400" size={20} />
+                                    <h3 className="font-bold text-gray-800 dark:text-white text-lg">Upcoming Deadlines</h3>
+                                </div>
                                 <button 
                                     onClick={() => navigate('/employee/my-tasks')}
-                                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                                    className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors"
                                 >
-                                    View All Tasks →
+                                    View All <ArrowRight size={16} />
                                 </button>
                             </div>
 
                             <div className="p-6">
                                 {employeeStats.upcomingTasks.length === 0 ? (
-                                    <div className="text-center py-8">
-                                        <div className="inline-block p-4 rounded-full bg-green-50 mb-3">
-                                            <span className="text-3xl">😎</span>
-                                        </div>
-                                        <p className="text-gray-800 font-medium">All caught up!</p>
-                                        <p className="text-sm text-gray-500">No upcoming deadlines found.</p>
+                                    <div className="text-center py-10 flex flex-col items-center">
+                                        <div className="w-16 h-16 bg-green-50 dark:bg-green-900/20 text-green-500 dark:text-green-400 rounded-full flex items-center justify-center mb-4 text-2xl">🎉</div>
+                                        <h4 className="text-gray-900 dark:text-white font-bold text-lg">All Caught Up!</h4>
+                                        <p className="text-gray-500 dark:text-gray-400">You have no upcoming deadlines for now.</p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-3">
+                                    <div className="space-y-4">
                                         {employeeStats.upcomingTasks.map((task, index) => (
-                                            <div key={index} className="flex items-center p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors group">
-                                                {/* Calendar Icon Box */}
-                                                <div className="hidden sm:flex flex-col items-center justify-center w-12 h-12 bg-red-50 text-red-600 rounded-lg mr-4 group-hover:bg-red-100 transition-colors">
-                                                    <span className="text-xs font-bold uppercase">{new Date(task.dueDate).toLocaleString('default', { month: 'short' })}</span>
-                                                    <span className="text-lg font-bold leading-none">{new Date(task.dueDate).getDate()}</span>
+                                            <div key={index} className="flex items-center p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-indigo-100 dark:hover:border-indigo-900 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/20 transition-all group">
+                                                {/* Date Box */}
+                                                <div className="hidden sm:flex flex-col items-center justify-center w-14 h-14 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-xl mr-4 group-hover:border-indigo-200 dark:group-hover:border-indigo-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors shadow-sm">
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider">{new Date(task.dueDate).toLocaleString('default', { month: 'short' })}</span>
+                                                    <span className="text-xl font-bold leading-none">{new Date(task.dueDate).getDate()}</span>
                                                 </div>
                                                 
-                                                {/* Task Details */}
+                                                {/* Content */}
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-semibold text-gray-800 truncate">{task.title}</p>
-                                                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                        Due: {task.dueDate}
-                                                    </p>
+                                                    <h4 className="text-base font-semibold text-gray-800 dark:text-gray-200 truncate group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">{task.title}</h4>
+                                                    <div className="flex items-center gap-4 mt-1">
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                                            <Clock size={12} /> Due: {task.dueDate}
+                                                        </span>
+                                                        <span className="sm:hidden text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">
+                                                            {new Date(task.dueDate).toLocaleDateString()}
+                                                        </span>
+                                                    </div>
                                                 </div>
-
-                                                {/* Mobile Date Badge (Alternative to left box) */}
-                                                <div className="sm:hidden text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded">
-                                                    {new Date(task.dueDate).getDate()} {new Date(task.dueDate).toLocaleString('default', { month: 'short' })}
+                                                
+                                                {/* Action Arrow */}
+                                                <div className="text-gray-300 dark:text-gray-600 group-hover:text-indigo-400 dark:group-hover:text-indigo-400 transition-colors">
+                                                    <ArrowRight size={20} />
                                                 </div>
                                             </div>
                                         ))}
@@ -207,24 +213,42 @@ function EmployeeDashboard() {
                             </div>
                         </div>
 
-                        {/* Right Side Widget (Optional - can be Announcements or Quick Actions) */}
-                        <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl shadow-lg text-white p-6 flex flex-col justify-between">
-                            <div>
-                                <h3 className="text-lg font-bold mb-2">Need a Break? 🌴</h3>
-                                <p className="text-blue-100 text-sm mb-6">
-                                    You have <strong>{employeeStats.leaves} days</strong> of paid leave remaining. Plan your vacation ahead!
-                                </p>
+                        {/* RIGHT: QUICK ACTIONS WIDGET */}
+                        <div className="flex flex-col gap-6">
+                            {/* Leave Request Card */}
+                            <div className="bg-gradient-to-br from-indigo-600 to-violet-700 dark:from-indigo-900 dark:to-violet-900 rounded-2xl shadow-xl text-white p-6 relative overflow-hidden group border border-indigo-500 dark:border-indigo-800">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <Plane size={120} />
+                                </div>
+                                <div className="relative z-10">
+                                    <h3 className="text-xl font-bold mb-2">Need a Break? 🌴</h3>
+                                    <p className="text-indigo-100 dark:text-indigo-200 text-sm mb-6 leading-relaxed">
+                                        You have <span className="font-bold text-white bg-white/20 px-1.5 py-0.5 rounded">{employeeStats.leaves} days</span> of leave remaining. Recharge yourself!
+                                    </p>
+                                    <button 
+                                        onClick={() => navigate('/employee/leave-apply')}
+                                        className="w-full py-3 bg-white text-indigo-700 dark:text-indigo-900 font-bold rounded-xl shadow-lg hover:bg-indigo-50 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                                    >
+                                        Apply for Leave <ArrowRight size={18} />
+                                    </button>
+                                </div>
                             </div>
-                            <button 
-                                onClick={() => navigate('/employee/leave-apply')}
-                                className="w-full py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                Apply Leave
-                            </button>
+
+                            {/* Secondary Quick Link */}
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 flex flex-col justify-center items-center text-center hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
+                                <div className="w-12 h-12 bg-gray-50 dark:bg-gray-700 rounded-full flex items-center justify-center text-gray-400 dark:text-gray-300 mb-3">
+                                    <Briefcase size={24} />
+                                </div>
+                                <h4 className="font-bold text-gray-800 dark:text-white">Project Workspace</h4>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">View detailed progress of all your active projects.</p>
+                                <button className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border-b border-gray-300 dark:border-gray-500 hover:border-gray-900 dark:hover:border-white transition-colors pb-0.5">
+                                    Go to Projects
+                                </button>
+                            </div>
                         </div>
+
                     </div>
-                </>
+                </div>
             )}
         </div>
     );

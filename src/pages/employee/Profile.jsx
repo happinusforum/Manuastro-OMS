@@ -1,11 +1,17 @@
-// src/pages/employee/Profile.jsx (IMAGE PERSISTENCE FIX)
+// src/pages/employee/Profile.jsx
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext'; 
 import { updateEmployeeProfile } from '../../api/EmployeeService'; 
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
-// Placeholder if no image exists
+// 🎨 Icons & Animation
+import { motion } from 'framer-motion';
+import { 
+    Camera, Mail, Phone, MapPin, Briefcase, User, 
+    Save, X, Edit2, Shield, Hash, CheckCircle, AlertCircle 
+} from 'lucide-react';
+
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png';
 
 function Profile() {
@@ -20,7 +26,7 @@ function Profile() {
     const [editMode, setEditMode] = useState(false); 
 
     const currentRole = userProfile?.role;
-    // Rule: Only Admins can edit sensitive fields like Name, ID, Role
+    // Rule: Only Admins can edit sensitive fields
     const canEditSensitive = currentRole === 'admin'; 
 
     useEffect(() => {
@@ -33,37 +39,27 @@ function Profile() {
                 address: userProfile.address || '',
                 role: userProfile.role || 'employee',
             });
-            // Load saved photo or default
             setPreviewImage(userProfile.photoURL || DEFAULT_AVATAR);
         }
     }, [userProfile]);
 
-    // --- 📸 HANDLE IMAGE SELECTION & CONVERT TO BASE64 ---
+    // 📸 IMAGE HANDLER
     const handleImageChange = (e) => {
         const file = e.target.files[0];
         if (file) {
-            // Restriction: Limit file size to 1MB (Firestore limit is small for documents)
             if (file.size > 1024 * 1024) {
-                setMessage({ type: 'error', text: '❌ Image size too large! Please choose an image under 1MB.' });
+                setMessage({ type: 'error', text: 'Image size too large! Keep it under 1MB.' });
                 return;
             }
-
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setPreviewImage(reader.result); // This result is the Base64 string
-            };
+            reader.onloadend = () => setPreviewImage(reader.result);
             reader.readAsDataURL(file);
         }
     };
 
-    const triggerFileInput = () => {
-        if (editMode) fileInputRef.current.click();
-    };
+    const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
+    // 💾 UPDATE LOGIC
     const handleUpdateProfile = async (e) => {
         e.preventDefault();
         setMessage({ type: '', text: '' });
@@ -73,7 +69,7 @@ function Profile() {
             const updates = {
                 phoneNumber: formData.phoneNumber,
                 address: formData.address,
-                photoURL: previewImage, // 🔥 Save the Base64 string to Firestore
+                photoURL: previewImage,
                 ...(canEditSensitive && {
                     name: formData.name,
                     empId: formData.empId,
@@ -81,174 +77,219 @@ function Profile() {
                 })
             };
 
-            // Call API to update Firestore
             await updateEmployeeProfile(userProfile.uid, updates);
+            setMessage({ type: 'success', text: 'Profile updated successfully!' });
+            setEditMode(false);
             
-            setMessage({ type: 'success', text: '✅ Profile updated successfully!' });
-            setEditMode(false); 
-            
-            // Optional: Force a small delay reload if context doesn't update automatically
-            // window.location.reload(); 
-            
+            // Auto hide success message after 3 seconds
+            setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+
         } catch (error) {
-            setMessage({ type: 'error', text: '❌ Update Failed: ' + error.message });
+            setMessage({ type: 'error', text: 'Update Failed: ' + error.message });
         } finally {
             setIsUpdating(false);
         }
     };
 
-    if (loading || !userProfile) return <div className="flex h-screen items-center justify-center bg-gray-50"><LoadingSpinner /></div>;
+    if (loading || !userProfile) return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-300"><LoadingSpinner /></div>;
 
     return (
-        <div className="min-h-screen bg-gray-100 py-10 px-4 flex justify-center items-start">
+        <div className="min-h-screen bg-gray-50/50 dark:bg-gray-900 pb-10 transition-colors duration-300">
             
-            <div className="bg-white w-full max-w-4xl rounded-2xl shadow-xl overflow-hidden animate-fade-in-up">
+            {/* --- 1. COVER BANNER --- */}
+            <div className="h-48 md:h-64 bg-gradient-to-r from-indigo-900 via-purple-900 to-indigo-900 dark:from-indigo-950 dark:via-purple-950 dark:to-indigo-950 relative overflow-hidden">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+            </div>
+
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 relative -mt-20 sm:-mt-24 z-10">
                 
-                {/* 🎨 1. HEADER BANNER */}
-                <div className="h-40 bg-gradient-to-r from-blue-600 to-purple-600 relative">
-                    <div className="absolute -bottom-16 left-8 group">
-                        {/* Profile Image Circle */}
-                        <div className="relative w-32 h-32 rounded-full border-4 border-white shadow-md overflow-hidden bg-white">
-                            <img 
-                                src={previewImage} 
-                                alt="Profile" 
-                                className="w-full h-full object-cover"
-                            />
+                {/* --- 2. PROFILE HEADER CARD --- */}
+                <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors duration-300"
+                >
+                    <div className="p-6 sm:p-8 flex flex-col md:flex-row items-center md:items-end gap-6">
+                        
+                        {/* Avatar */}
+                        <div className="relative group shrink-0">
+                            <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-white dark:border-gray-800 shadow-lg overflow-hidden bg-gray-100 dark:bg-gray-700 transition-colors duration-300">
+                                <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+                            </div>
                             
-                            {/* Camera Icon Overlay (Visible in Edit Mode) */}
                             {editMode && (
-                                <div 
-                                    onClick={triggerFileInput}
-                                    className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                <button 
+                                    onClick={() => fileInputRef.current.click()}
+                                    className="absolute bottom-2 right-2 p-2.5 bg-indigo-600 dark:bg-indigo-500 text-white rounded-full shadow-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all hover:scale-110"
+                                    title="Upload Photo"
                                 >
-                                    <span className="text-white text-2xl">📷</span>
-                                </div>
+                                    <Camera size={18} />
+                                </button>
+                            )}
+                            <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
+                        </div>
+
+                        {/* Name & Role */}
+                        <div className="flex-1 text-center md:text-left mb-2">
+                            <h1 className="text-2xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">{formData.name}</h1>
+                            <div className="flex items-center justify-center md:justify-start gap-3 mt-2">
+                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border flex items-center gap-1.5
+                                    ${currentRole === 'admin' ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-800' : 
+                                      currentRole === 'hr' ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-800' : 
+                                      'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800'}`}>
+                                    <Shield size={12} /> {currentRole}
+                                </span>
+                                <span className="text-gray-400 dark:text-gray-500 text-sm font-medium flex items-center gap-1">
+                                    <Hash size={12} /> {formData.empId}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-3 self-center md:self-end md:mb-4">
+                            {!editMode ? (
+                                <button 
+                                    onClick={() => setEditMode(true)}
+                                    className="bg-gray-900 hover:bg-black dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 active:scale-95"
+                                >
+                                    <Edit2 size={16} /> Edit Profile
+                                </button>
+                            ) : (
+                                <>
+                                    <button 
+                                        onClick={() => { setEditMode(false); setPreviewImage(userProfile.photoURL || DEFAULT_AVATAR); }}
+                                        className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-5 py-2.5 rounded-xl font-bold hover:bg-gray-50 dark:hover:bg-gray-600 transition-all active:scale-95 flex items-center gap-2"
+                                    >
+                                        <X size={18} /> Cancel
+                                    </button>
+                                    <button 
+                                        onClick={handleUpdateProfile}
+                                        disabled={isUpdating}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg hover:shadow-indigo-500/30 transition-all active:scale-95 flex items-center gap-2"
+                                    >
+                                        {isUpdating ? <span className="animate-spin">⏳</span> : <Save size={18} />} Save
+                                    </button>
+                                </>
                             )}
                         </div>
-                        {/* Hidden Input */}
-                        <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
-                    </div>
-                </div>
-
-                {/* 📝 2. ACTION BAR */}
-                <div className="mt-16 px-8 flex justify-between items-center flex-wrap gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-800">{formData.name}</h1>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-                            currentRole === 'admin' ? 'bg-red-100 text-red-600' : 
-                            currentRole === 'hr' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
-                        }`}>
-                            {currentRole}
-                        </span>
                     </div>
                     
-                    {!editMode ? (
-                        <button 
-                            onClick={() => setEditMode(true)}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg shadow transition transform hover:-translate-y-1 flex items-center gap-2"
+                    {/* Status Message Bar */}
+                    {message.text && (
+                        <motion.div 
+                            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                            className={`px-8 py-3 flex items-center gap-2 text-sm font-bold justify-center
+                            ${message.type === 'success' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}
                         >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                            Edit Profile
-                        </button>
-                    ) : (
-                        <div className="flex gap-3">
-                            <button 
-                                onClick={() => {
-                                    setEditMode(false);
-                                    setPreviewImage(userProfile.photoURL || DEFAULT_AVATAR); // Revert image on cancel
-                                }}
-                                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition font-medium"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={handleUpdateProfile}
-                                disabled={isUpdating}
-                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg shadow transition flex items-center gap-2 font-medium"
-                            >
-                                {isUpdating ? 'Saving...' : '💾 Save Changes'}
-                            </button>
-                        </div>
+                            {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                            {message.text}
+                        </motion.div>
                     )}
-                </div>
+                </motion.div>
 
-                {/* 📩 MESSAGE ALERT */}
-                {message.text && (
-                    <div className={`mx-8 mt-4 p-3 rounded-lg text-sm font-semibold text-center border ${message.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                        {message.text}
-                    </div>
-                )}
-
-                {/* 📋 3. FORM SECTIONS */}
-                <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
+                {/* --- 3. DETAILS GRID --- */}
+                <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
                     
-                    {/* Section: Official Info (Read-Only for Employees) */}
-                    <div className="space-y-5">
-                        <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
-                            <span className="text-xl">🏢</span>
-                            <h3 className="text-lg font-bold text-gray-700">Official Details</h3>
-                        </div>
-                        
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Employee ID</label>
-                            <input 
-                                type="text" name="empId" value={formData.empId} onChange={handleChange} 
-                                disabled={!canEditSensitive || !editMode} 
-                                className={`w-full p-3 rounded-lg border transition ${!canEditSensitive ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-gray-200' : 'bg-white border-gray-300 focus:ring-2 focus:ring-blue-500'}`}
-                            />
-                        </div>
+                    {/* LEFT: Work Info */}
+                    <motion.div 
+                        initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
+                        className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 sm:p-8 transition-colors duration-300"
+                    >
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2 pb-2 border-b border-gray-100 dark:border-gray-700">
+                            <Briefcase className="text-indigo-500 dark:text-indigo-400" size={20} /> Professional Details
+                        </h3>
 
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Official Email</label>
-                            <input 
-                                type="email" name="email" value={formData.email} 
-                                disabled={true} 
-                                className="w-full p-3 rounded-lg border bg-gray-50 text-gray-500 cursor-not-allowed border-gray-200"
+                        <div className="space-y-6">
+                            <InputField 
+                                label="Full Name" icon={<User size={18} />} 
+                                name="name" value={formData.name} onChange={handleChange} 
+                                disabled={!canEditSensitive || !editMode} editMode={editMode}
+                            />
+                            <InputField 
+                                label="Employee ID" icon={<Hash size={18} />} 
+                                name="empId" value={formData.empId} onChange={handleChange} 
+                                disabled={!canEditSensitive || !editMode} editMode={editMode}
+                            />
+                            <InputField 
+                                label="Official Email" icon={<Mail size={18} />} 
+                                name="email" value={formData.email} 
+                                disabled={true} editMode={editMode} 
                             />
                         </div>
+                    </motion.div>
 
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Full Name</label>
-                            <input 
-                                type="text" name="name" value={formData.name} onChange={handleChange}
-                                disabled={!canEditSensitive || !editMode}
-                                className={`w-full p-3 rounded-lg border transition ${(!canEditSensitive || !editMode) ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-gray-200' : 'bg-white border-gray-300 focus:ring-2 focus:ring-blue-500'}`}
-                            />
-                        </div>
-                    </div>
+                    {/* RIGHT: Personal Info */}
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
+                        className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 sm:p-8 transition-colors duration-300"
+                    >
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2 pb-2 border-b border-gray-100 dark:border-gray-700">
+                            <User className="text-purple-500 dark:text-purple-400" size={20} /> Personal Information
+                        </h3>
 
-                    {/* Section: Personal Info (Editable by Everyone) */}
-                    <div className="space-y-5">
-                        <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
-                            <span className="text-xl">👤</span>
-                            <h3 className="text-lg font-bold text-gray-700">Personal Contact</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="md:col-span-2">
+                                <InputField 
+                                    label="Phone Number" icon={<Phone size={18} />} 
+                                    name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} 
+                                    disabled={!editMode} editMode={editMode} placeholder="+91 00000 00000"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-1">Current Address</label>
+                                <div className={`relative group transition-all duration-200 rounded-xl overflow-hidden
+                                    ${editMode ? 'ring-2 ring-gray-100 dark:ring-gray-700 focus-within:ring-indigo-500 bg-gray-50 dark:bg-gray-900' : 'bg-transparent border-b border-gray-100 dark:border-gray-700'}`}
+                                >
+                                    <div className="absolute top-3 left-3 text-gray-400 dark:text-gray-500">
+                                        <MapPin size={18} />
+                                    </div>
+                                    <textarea 
+                                        name="address" rows="3" 
+                                        value={formData.address} onChange={handleChange} disabled={!editMode}
+                                        className={`w-full pl-10 pr-4 py-3 bg-transparent border-none outline-none resize-none text-gray-700 dark:text-gray-200 font-medium
+                                        ${!editMode ? 'cursor-default' : ''}`}
+                                        placeholder={editMode ? "Enter full address..." : "No address provided."}
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Phone Number</label>
-                            <input 
-                                type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange}
-                                disabled={!editMode}
-                                placeholder="+91 98765 43210"
-                                className={`w-full p-3 rounded-lg border transition ${!editMode ? 'bg-transparent border-transparent px-0 font-bold text-gray-800' : 'bg-white border-gray-300 focus:ring-2 focus:ring-green-500'}`}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Current Address</label>
-                            <textarea 
-                                name="address" rows="3" value={formData.address} onChange={handleChange}
-                                disabled={!editMode}
-                                placeholder="Enter your full address"
-                                className={`w-full p-3 rounded-lg border transition resize-none ${!editMode ? 'bg-transparent border-transparent px-0 font-medium text-gray-800' : 'bg-white border-gray-300 focus:ring-2 focus:ring-green-500'}`}
-                            />
-                        </div>
-                    </div>
+                    </motion.div>
 
                 </div>
             </div>
         </div>
     );
 }
+
+// 🧱 REUSABLE INPUT COMPONENT
+const InputField = ({ label, icon, name, value, onChange, disabled, editMode, placeholder }) => (
+    <div>
+        <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 ml-1">{label}</label>
+        <div className={`relative flex items-center transition-all duration-200 rounded-xl overflow-hidden
+            ${editMode && !disabled ? 'bg-gray-50 dark:bg-gray-900 ring-2 ring-gray-100 dark:ring-gray-700 focus-within:ring-indigo-500' : 'bg-transparent border-b border-gray-100 dark:border-gray-700 pb-1'}`}
+        >
+            <div className={`pl-3 pr-2 ${disabled ? 'text-gray-300 dark:text-gray-600' : 'text-gray-500 dark:text-gray-400'}`}>
+                {icon}
+            </div>
+            <input 
+                type="text" 
+                name={name} 
+                value={value} 
+                onChange={onChange} 
+                disabled={disabled}
+                placeholder={placeholder}
+                className={`w-full py-2.5 bg-transparent border-none outline-none font-medium
+                ${disabled ? 'text-gray-500 dark:text-gray-500 cursor-not-allowed' : 'text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-600'}`}
+            />
+            {disabled && editMode && (
+                <div className="pr-3 text-gray-300 dark:text-gray-600" title="Cannot edit this field">
+                    <Shield size={14} />
+                </div>
+            )}
+        </div>
+    </div>
+);
 
 export default Profile;

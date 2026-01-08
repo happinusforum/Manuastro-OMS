@@ -1,22 +1,28 @@
 // src/components/common/Header.jsx
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext'; 
 import { logoutUser } from '../../api/AuthService'; 
 import NotificationBell from '../ui/NotificationBell'; 
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Menu, LogOut, User, Settings, ChevronDown, Calendar } from 'lucide-react';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png';
 
-function Header({ toggleSidebar }) { // 🛠️ Accept toggleSidebar prop
+function Header({ toggleSidebar }) { 
     const { currentUser, userProfile, loading } = useAuth();
     const navigate = useNavigate();
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
 
-    // Data Extraction
     const fullName = userProfile?.name || currentUser?.email.split('@')[0] || 'Guest';
     const userRole = userProfile?.role || 'guest';
-    const userEmail = currentUser?.email || 'N/A';
     const userPhoto = userProfile?.photoURL || DEFAULT_AVATAR;
+
+    const today = new Date().toLocaleDateString('en-US', { 
+        weekday: 'short', day: 'numeric', month: 'short' 
+    });
 
     const handleLogout = async () => {
         try {
@@ -25,81 +31,121 @@ function Header({ toggleSidebar }) { // 🛠️ Accept toggleSidebar prop
         } catch (error) { console.error("Logout Error:", error); }
     };
 
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
     if (loading) return null; 
 
     return (
-        <header className="bg-white shadow-md px-4 py-3 sticky top-0 z-30 flex justify-between items-center h-16 shrink-0">
-            
-            {/* Left Side: Toggle Button + Welcome Text */}
-            <div className="flex items-center gap-4">
+        <header className="sticky top-0 z-30 w-full bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-200/60 dark:border-gray-700 shadow-sm transition-all duration-300">
+            <div className="px-4 sm:px-6 py-3 h-16 flex items-center justify-between">
                 
-                {/* 🟢 SIDEBAR TOGGLE BUTTON (Visible mostly on Mobile/Tablet) */}
-                <button 
-                    onClick={toggleSidebar}
-                    className="p-2 rounded-md text-gray-600 hover:bg-gray-100 hover:text-blue-600 transition-colors focus:outline-none"
-                    title="Toggle Sidebar"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-                    </svg>
-                </button>
+                {/* --- LEFT: Toggle & Info --- */}
+                <div className="flex items-center gap-4">
+                    <button 
+                        onClick={toggleSidebar}
+                        className="p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all active:scale-95 focus:outline-none"
+                    >
+                        <Menu size={24} />
+                    </button>
 
-                <div className="flex flex-col">
-                    <h1 className="text-lg font-bold text-gray-800 tracking-tight flex items-center gap-2">
-                        <span className="hidden sm:inline">Welcome,</span> 
-                        <span className="text-blue-600 truncate max-w-[120px] sm:max-w-none">{fullName.split(' ')[0]}</span>
-                    </h1>
-                    
-                    {/* Role Badge */}
-                    <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
-                        <span className="bg-gray-100 px-2 py-0.5 rounded border border-gray-200 font-semibold uppercase tracking-wider text-[10px]">
-                            {userRole}
-                        </span>
-                        <span className="text-gray-300">|</span>
-                        <span className="truncate max-w-[150px]">{userEmail}</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Right Side: Actions */}
-            <div className="flex items-center gap-3 sm:gap-6">
-                
-                {/* 🔔 Notification Bell */}
-                <div className="relative hover:bg-gray-50 p-2 rounded-full transition cursor-pointer">
-                    <NotificationBell />
-                </div>
-                
-                {/* 👤 Profile & Logout Section */}
-                {currentUser && (
-                    <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
-                        
-                        {/* Profile Image */}
-                        <div 
-                            onClick={() => navigate('/employee/profile')}
-                            className="relative group cursor-pointer"
-                            title="My Profile"
-                        >
-                            <img 
-                                src={userPhoto} 
-                                alt="User" 
-                                className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm group-hover:ring-2 ring-blue-100 transition"
-                            />
-                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full"></span>
+                    <div className="flex flex-col">
+                        <h1 className="text-sm sm:text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center">
+                            <span className="text-gray-400 dark:text-gray-500 font-normal hidden sm:inline mr-1">Hello,</span>
+                            <span className="bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent truncate max-w-[120px] sm:max-w-none capitalize">
+                                {fullName.split(' ')[0]}
+                            </span>
+                            <span className="text-xl animate-pulse ml-1">👋</span>
+                        </h1>
+                        <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                            <Calendar size={10} /> {today}
                         </div>
-
-                        {/* Logout Button */}
-                        <button 
-                            onClick={handleLogout} 
-                            className="hidden sm:flex bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition items-center gap-2 font-semibold text-xs border border-red-100"
-                            title="Logout"
-                        >
-                            <span>Logout</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                            </svg>
-                        </button>
                     </div>
-                )}
+                </div>
+
+                {/* --- RIGHT: Actions --- */}
+                <div className="flex items-center gap-3 sm:gap-5">
+                    
+                    <div className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400">
+                        <NotificationBell /> 
+                    </div>
+
+                    <div className="relative" ref={dropdownRef}>
+                        <button 
+                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                            className="flex items-center gap-3 pl-2 sm:pl-4 sm:border-l border-gray-200 dark:border-gray-700 focus:outline-none group"
+                        >
+                            <div className="hidden md:flex flex-col items-end">
+                                <span className="text-sm font-bold text-gray-700 dark:text-gray-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                    {fullName}
+                                </span>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider 
+                                    ${userRole === 'admin' ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                                    {userRole}
+                                </span>
+                            </div>
+
+                            <div className="relative">
+                                <img 
+                                    src={userPhoto} 
+                                    alt="User" 
+                                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-white dark:border-gray-800 shadow-sm group-hover:ring-2 ring-indigo-100 dark:ring-indigo-900 transition-all"
+                                />
+                                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
+                            </div>
+                            <ChevronDown size={16} className={`text-gray-400 hidden sm:block transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        <AnimatePresence>
+                            {isDropdownOpen && (
+                                <motion.div 
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="absolute right-0 mt-3 w-56 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden origin-top-right z-50"
+                                >
+                                    <div className="md:hidden px-4 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/50">
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate">{fullName}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{userRole}</p>
+                                    </div>
+
+                                    <div className="p-2 space-y-1">
+                                        <button 
+                                            onClick={() => { navigate('/employee/profile'); setIsDropdownOpen(false); }} 
+                                            className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl transition-all"
+                                        >
+                                            <User size={16} /> My Profile
+                                        </button>
+                                        
+                                        <button 
+                                            onClick={() => { navigate('/settings'); setIsDropdownOpen(false); }} 
+                                            className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl transition-all"
+                                        >
+                                            <Settings size={16} /> Settings
+                                        </button>
+                                    </div>
+
+                                    <div className="p-2 border-t border-gray-100 dark:border-gray-700">
+                                        <button 
+                                            onClick={handleLogout} 
+                                            className="w-full flex items-center gap-3 px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
+                                        >
+                                            <LogOut size={16} /> Sign Out
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </div>
             </div>
         </header>
     );

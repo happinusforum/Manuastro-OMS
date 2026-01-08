@@ -2,22 +2,43 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useFirestore } from '../../hooks/useFirestore'; 
+import { useFirestore } from '../../hooks/useFirestore';
+import { collection, query, where, getDocs, addDoc } from 'firebase/firestore'; 
+import { db } from '../../Firebase'; 
+
+// 🎨 UI & Animation Libraries
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+    Plane, Calendar, MessageSquare, Send, CheckCircle, 
+    AlertCircle, Briefcase, MapPin, Clock, FileText 
+} from 'lucide-react';
 
 const initialFormState = {
     leaveType: 'Sick Leave',
+    travelType: 'Client Visit',
     startDate: '',
     endDate: '',
     reason: '',
-    type: 'leave'
+    type: 'leave' // default
+};
+
+// ✨ Animation Variants
+const containerVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
+};
+
+const formSectionVariants = {
+    hidden: { opacity: 0, x: -20 },
+    visible: { opacity: 1, x: 0, transition: { duration: 0.3 } },
+    exit: { opacity: 0, x: 20, transition: { duration: 0.2 } }
 };
 
 function LeaveApply() {
     const [formData, setFormData] = useState(initialFormState);
-    const [message, setMessage] = useState('');
+    const [message, setMessage] = useState({ type: '', text: '' });
     const [loading, setLoading] = useState(false);
     
-    // 💡 Firestore & Auth Hooks
     const { addDocument } = useFirestore('leaves'); 
     const { currentUser, userProfile } = useAuth(); 
 
@@ -28,178 +49,272 @@ function LeaveApply() {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    // 💡 SUBMIT LOGIC (UNCHANGED)
+    // 🏷️ Type Selector Handler
+    const handleTypeSelect = (selectedType) => {
+        setFormData({ ...formData, type: selectedType });
+        setMessage({ type: '', text: '' });
+    };
+
+    // 🚀 SUBMIT LOGIC
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setMessage('');
+        setMessage({ type: '', text: '' });
         setLoading(true);
 
-        if (formData.type === 'leave' && (!formData.startDate || !formData.endDate)) {
-            setMessage("Error: Please select both start and end dates.");
+        if ((formData.type === 'leave' || formData.type === 'travel') && (!formData.startDate || !formData.endDate)) {
+            setMessage({ type: 'error', text: "Start and End dates are required!" });
             setLoading(false);
             return;
         }
 
         if (!formData.reason) {
-            setMessage("Error: Please provide a reason.");
+            setMessage({ type: 'error', text: "Please provide a reason." });
             setLoading(false);
             return;
         }
-        
-        if (!userId) {
-             setMessage("Error: User authentication data is missing. Please log in again.");
-             setLoading(false);
-             return;
+
+        let days = 0;
+        if (formData.startDate && formData.endDate) {
+            const start = new Date(formData.startDate);
+            const end = new Date(formData.endDate);
+            const diffTime = Math.abs(end - start);
+            days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
         }
 
-        const newLeaveRequest = {
-            ...formData,
-            userId: userId, 
-            userName: userName, 
-            empId: userProfile?.empId || 'N/A', // Added EmpID for Admin reference
-            submittedAt: new Date(),
-            status: 'Pending', 
+        const newRequest = {
+            userId, name: userName, empId: userProfile?.empId || 'N/A', 
+            type: formData.type, 
+            ...(formData.type === 'leave' && { leaveType: formData.leaveType }),
+            ...(formData.type === 'travel' && { travelType: formData.travelType }),
+            startDate: formData.startDate,
+            endDate: formData.endDate,
+            days: days || 0,
+            reason: formData.reason,
+            appliedAt: new Date(), 
+            status: 'Pending HR', 
+            hrActionBy: null, adminActionBy: null
         };
 
         try {
-            await addDocument(newLeaveRequest);
-            setMessage("Success! Your request has been submitted to HR.");
-            setFormData(initialFormState); // Form reset
+            const docRef = await addDocument(newRequest); 
+
+            const q = query(collection(db, "users"), where("role", "==", "hr"));
+            const querySnapshot = await getDocs(q);
+
+            const notifPromises = querySnapshot.docs.map(doc => {
+                return addDoc(collection(db, "notifications"), {
+                    recipientId: doc.id, 
+                    message: `New ${formData.type} request from ${userName}`,
+                    type: `${formData.type}_request`,
+                    link: '/hr/leave-requests',
+                    status: 'unread',
+                    createdAt: new Date(),
+                    relatedId: docRef?.id || null 
+                });
+            });
+
+            if (notifPromises.length > 0) await Promise.all(notifPromises);
+
+            setMessage({ type: 'success', text: "Request Sent! HR has been notified." });
+            setFormData(initialFormState); 
+
         } catch (error) {
-            setMessage(`Error submitting request: ${error.message}`);
+            setMessage({ type: 'error', text: error.message });
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-gray-50/50 p-6">
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-8 flex items-center justify-center transition-colors duration-300">
             
-            {/* --- HEADER --- */}
-            <div className="mb-8 text-center max-w-2xl mx-auto">
-                <h2 className="text-2xl font-bold text-gray-800">Submit Request</h2>
-                <p className="text-sm text-gray-500 mt-1">Apply for leaves or submit general queries to the HR department.</p>
-            </div>
-
-            {/* --- FORM CARD --- */}
-            <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-8">
+            <motion.div 
+                initial="hidden" animate="visible" variants={containerVariants}
+                className="w-full max-w-4xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden border border-white/50 dark:border-gray-700"
+            >
+                <div className="flex flex-col md:flex-row h-full">
                     
-                    {/* Feedback Messages */}
-                    {message && (
-                        <div className={`mb-6 p-4 rounded-lg text-sm font-medium flex items-center gap-2 ${message.startsWith('Error') ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
-                            {message.startsWith('Error') ? (
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            ) : (
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            )}
-                            {message}
-                        </div>
-                    )}
+                    {/* 🎨 LEFT SIDE: Visual Selector */}
+                    <div className="md:w-1/3 bg-gradient-to-br from-indigo-600 to-purple-700 dark:from-indigo-900 dark:to-purple-900 p-8 flex flex-col justify-between text-white relative overflow-hidden">
+                        {/* Abstract Shapes */}
+                        <div className="absolute top-[-50px] left-[-50px] w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
+                        <div className="absolute bottom-[-20px] right-[-20px] w-40 h-40 bg-pink-500/20 rounded-full blur-3xl"></div>
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        
-                        {/* 1. Request Type */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">I want to...</label>
-                            <select 
-                                name="type" 
-                                value={formData.type} 
-                                onChange={handleChange} 
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer"
+                        <div className="relative z-10">
+                            <h2 className="text-3xl font-extrabold mb-2 text-white">Apply Now</h2>
+                            <p className="text-indigo-100 text-sm opacity-90">What's on your mind today?</p>
+                        </div>
+
+                        <div className="flex flex-col gap-4 mt-8 relative z-10">
+                            {/* Option 1: Leave */}
+                            <button 
+                                onClick={() => handleTypeSelect('leave')}
+                                className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-300 border ${formData.type === 'leave' ? 'bg-white/20 border-white shadow-lg scale-105' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
                             >
-                                <option value="leave">Apply for Leave 🏖️</option>
-                                <option value="query">Raise a Query / Complaint 📢</option>
-                            </select>
-                        </div>
-
-                        {/* 2. Leave Specific Fields */}
-                        {formData.type === 'leave' && (
-                            <div className="bg-blue-50/50 p-6 rounded-lg border border-blue-100 space-y-5 animate-fade-in-up">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Leave Category</label>
-                                    <select 
-                                        name="leaveType" 
-                                        value={formData.leaveType} 
-                                        onChange={handleChange} 
-                                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    >
-                                        <option value="Sick Leave">Sick Leave 🤒</option>
-                                        <option value="Casual Leave">Casual Leave 🏠</option>
-                                        <option value="Annual Leave">Annual Leave ✈️</option>
-                                        <option value="Emergency Leave">Emergency Leave 🚨</option>
-                                    </select>
+                                <div className="p-2 bg-white rounded-lg text-indigo-600"><Calendar size={20} /></div>
+                                <div className="text-left">
+                                    <h3 className="font-bold text-sm text-white">Leave Request</h3>
+                                    <p className="text-[10px] text-indigo-200">Sick, Casual, Annual</p>
                                 </div>
+                            </button>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">From Date</label>
-                                        <input 
-                                            type="date" 
-                                            name="startDate" 
-                                            value={formData.startDate} 
-                                            onChange={handleChange} 
-                                            required={formData.type === 'leave'}
-                                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">To Date</label>
-                                        <input 
-                                            type="date" 
-                                            name="endDate" 
-                                            value={formData.endDate} 
-                                            onChange={handleChange} 
-                                            required={formData.type === 'leave'}
-                                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
-                                        />
-                                    </div>
+                            {/* Option 2: Travel */}
+                            <button 
+                                onClick={() => handleTypeSelect('travel')}
+                                className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-300 border ${formData.type === 'travel' ? 'bg-white/20 border-white shadow-lg scale-105' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
+                            >
+                                <div className="p-2 bg-white rounded-lg text-purple-600"><Plane size={20} /></div>
+                                <div className="text-left">
+                                    <h3 className="font-bold text-sm text-white">Business Travel</h3>
+                                    <p className="text-[10px] text-indigo-200">Visits, Sites, Events</p>
                                 </div>
-                            </div>
-                        )}
+                            </button>
 
-                        {/* 3. Reason / Description */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                {formData.type === 'leave' ? 'Reason for Leave' : 'Describe your Query'}
-                            </label>
-                            <textarea 
-                                name="reason" 
-                                value={formData.reason} 
-                                onChange={handleChange} 
-                                placeholder={formData.type === 'leave' ? "e.g., Not feeling well, Family function..." : "e.g., Issue with payroll, Access request..."}
-                                required 
-                                rows="4"
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"
-                            />
+                            {/* Option 3: Query */}
+                            <button 
+                                onClick={() => handleTypeSelect('query')}
+                                className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-300 border ${formData.type === 'query' ? 'bg-white/20 border-white shadow-lg scale-105' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
+                            >
+                                <div className="p-2 bg-white rounded-lg text-pink-600"><MessageSquare size={20} /></div>
+                                <div className="text-left">
+                                    <h3 className="font-bold text-sm text-white">Raise Query</h3>
+                                    <p className="text-[10px] text-indigo-200">Issues, Complaints</p>
+                                </div>
+                            </button>
                         </div>
+                        
+                        <div className="mt-8 text-xs text-indigo-200 opacity-60 relative z-10">
+                            *Approvals usually take 24-48 hours.
+                        </div>
+                    </div>
 
-                        {/* 4. Submit Button */}
-                        <button 
-                            type="submit" 
-                            disabled={loading} 
-                            className={`w-full py-3 rounded-lg text-white font-bold shadow-md transition-all flex justify-center items-center gap-2
-                            ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg active:scale-95'}`}
-                        >
-                            {loading ? (
-                                <>
-                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    Send Request
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                                </>
+                    {/* 📝 RIGHT SIDE: Dynamic Form */}
+                    <div className="md:w-2/3 p-8 bg-white/50 dark:bg-gray-900/50 relative">
+                        <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
+                            {formData.type === 'leave' && '🏖️ Plan your off days'}
+                            {formData.type === 'travel' && '✈️ Where are we going?'}
+                            {formData.type === 'query' && '📢 What can we help with?'}
+                        </h3>
+
+                        {/* Status Message */}
+                        <AnimatePresence>
+                            {message.text && (
+                                <motion.div 
+                                    initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                                    className={`mb-6 p-4 rounded-xl text-sm font-semibold flex items-center gap-3 shadow-sm
+                                    ${message.type === 'error' ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800'}`}
+                                >
+                                    {message.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
+                                    {message.text}
+                                </motion.div>
                             )}
-                        </button>
+                        </AnimatePresence>
 
-                    </form>
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            
+                            <AnimatePresence mode='wait'>
+                                <motion.div key={formData.type} variants={formSectionVariants} initial="hidden" animate="visible" exit="exit">
+                                    
+                                    {/* --- LEAVE FIELDS --- */}
+                                    {formData.type === 'leave' && (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1 block">Leave Type</label>
+                                                <div className="relative">
+                                                    <Briefcase className="absolute left-3 top-3 text-gray-400 dark:text-gray-500" size={18} />
+                                                    <select name="leaveType" value={formData.leaveType} onChange={handleChange}
+                                                        className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all appearance-none cursor-pointer hover:bg-white dark:hover:bg-gray-700"
+                                                    >
+                                                        <option>Sick Leave</option>
+                                                        <option>Casual Leave</option>
+                                                        <option>Annual Leave</option>
+                                                        <option>Emergency Leave</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* --- TRAVEL FIELDS --- */}
+                                    {formData.type === 'travel' && (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1 block">Purpose</label>
+                                                <div className="relative">
+                                                    <MapPin className="absolute left-3 top-3 text-gray-400 dark:text-gray-500" size={18} />
+                                                    <select name="travelType" value={formData.travelType} onChange={handleChange}
+                                                        className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all appearance-none cursor-pointer hover:bg-white dark:hover:bg-gray-700"
+                                                    >
+                                                        <option>Client Visit</option>
+                                                        <option>Site Inspection</option>
+                                                        <option>Training / Workshop</option>
+                                                        <option>Conference</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* --- DATE PICKERS --- */}
+                                    {(formData.type === 'leave' || formData.type === 'travel') && (
+                                        <div className="grid grid-cols-2 gap-4 mt-4">
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1 block">From</label>
+                                                <div className="relative">
+                                                    <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} required
+                                                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:[color-scheme:dark]" />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1 block">To</label>
+                                                <div className="relative">
+                                                    <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} required
+                                                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm dark:[color-scheme:dark]" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* --- REASON FIELD --- */}
+                                    <div className="mt-4">
+                                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1 block">
+                                            {formData.type === 'query' ? 'Describe Issue' : 'Details / Reason'}
+                                        </label>
+                                        <div className="relative">
+                                            <FileText className="absolute left-3 top-3 text-gray-400 dark:text-gray-500" size={18} />
+                                            <textarea 
+                                                name="reason" value={formData.reason} onChange={handleChange} rows="3" required
+                                                placeholder={formData.type === 'query' ? "Tell us exactly what happened..." : "Keep it brief and clear..."}
+                                                className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none transition-all hover:bg-white dark:hover:bg-gray-700 placeholder-gray-400"
+                                            />
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            </AnimatePresence>
+
+                            {/* SUBMIT BUTTON */}
+                            <div className="pt-2">
+                                <button 
+                                    type="submit" disabled={loading}
+                                    className={`w-full py-4 rounded-xl text-white font-bold shadow-lg flex justify-center items-center gap-2 transform transition-all duration-200
+                                    ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:scale-[1.02] hover:shadow-indigo-500/30 active:scale-95'}`}
+                                >
+                                    {loading ? (
+                                        <>
+                                            <Clock className="animate-spin" size={20} /> Processing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            Submit Request <Send size={18} />
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+
+                        </form>
+                    </div>
                 </div>
-            </div>
+            </motion.div>
         </div>
     );
 }

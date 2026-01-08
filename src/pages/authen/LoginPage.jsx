@@ -7,6 +7,10 @@ import { doc, getDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth'; 
 import { db, auth } from '../../Firebase'; 
 
+// 🎨 Premium Assets
+import { motion, AnimatePresence } from 'framer-motion';
+import { Mail, Lock, ArrowRight, CheckCircle, AlertTriangle, Shield, Users, User } from 'lucide-react';
+
 function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -18,17 +22,17 @@ function LoginPage() {
     const navigate = useNavigate();
     const { login, logout } = useAuth(); 
 
-    // 🔒 LOGIN LOGIC (UNCHANGED)
+    // 🔒 LOGIN LOGIC
     const handleLogin = async (e, intendedRole) => {
         e.preventDefault(); 
-        setError('');
-        setMessage('');
-        setLoading(true);
+        setError(''); setMessage(''); setLoading(true);
 
         try {
+            // 1. Authenticate with Firebase Auth
             const userCredential = await login(email, password);
             const user = userCredential.user;
-
+            
+            // 2. Fetch User Profile
             const userDocRef = doc(db, 'users', user.uid);
             const userDoc = await getDoc(userDocRef);
 
@@ -40,6 +44,23 @@ function LoginPage() {
             const userData = userDoc.data();
             const actualRole = userData.role;
 
+            // 🛑 3. CHECK MAINTENANCE MODE STATUS
+            const settingsRef = doc(db, 'settings', 'global');
+            const settingsSnap = await getDoc(settingsRef);
+            
+            if (settingsSnap.exists()) {
+                const isMaintenance = settingsSnap.data().maintenanceMode;
+                
+                // Logic: If Maintenance ON and User is NOT Admin -> Logout & Redirect
+                if (isMaintenance && actualRole !== 'admin') {
+                    await logout(); 
+                    setLoading(false);
+                    navigate('/maintenance'); 
+                    return; 
+                }
+            }
+
+            // 4. Verify Role Match
             if (actualRole !== intendedRole) {
                 await logout();
                 setError(`Access Denied! You are '${actualRole.toUpperCase()}', cannot login as '${intendedRole.toUpperCase()}'.`);
@@ -47,193 +68,203 @@ function LoginPage() {
                 return;
             }
 
+            // 5. Success - Navigate to Dashboard
             setLoading(false);
-            
             let path = '/';
             if (actualRole === 'admin') path = '/admin/dashboard';
             else if (actualRole === 'hr') path = '/hr/dashboard';
             else if (actualRole === 'employee') path = '/employee/dashboard';
-
             navigate(path);
 
         } catch (err) {
             console.error("Login Failed:", err);
             let msg = "Failed to login.";
-            if (err.code === 'auth/invalid-credential') msg = "Wrong Email or Password.";
+            if (err.code === 'auth/invalid-credential') msg = "Invalid Email or Password.";
             if (err.code === 'auth/too-many-requests') msg = "Too many attempts. Try later.";
             if (err.message.includes("Access Denied")) msg = err.message;
-            
             setError(msg);
             setLoading(false);
         }
     };
 
-    // 🔑 FORGOT PASSWORD LOGIC (UNCHANGED)
+    // 🔑 RESET LOGIC
     const handlePasswordReset = async (e) => {
         e.preventDefault();
-        if (!email) {
-            setError("Please enter your email address first.");
-            return;
-        }
+        if (!email) { setError("Please enter your email address first."); return; }
         
-        setError('');
-        setMessage('');
-        setLoading(true);
-
+        setError(''); setMessage(''); setLoading(true);
         try {
             await sendPasswordResetEmail(auth, email);
-            setMessage("✅ Password reset link sent to your email! Check your inbox.");
+            setMessage("Check your email! Password reset link sent.");
             setLoading(false);
         } catch (err) {
-            console.error(err);
             let msg = "Failed to send reset email.";
             if (err.code === 'auth/user-not-found') msg = "No user found with this email.";
-            if (err.code === 'auth/invalid-email') msg = "Invalid email format.";
-            setError(msg);
-            setLoading(false);
+            setError(msg); setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 to-blue-50 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-gray-900 p-4 relative overflow-hidden transition-colors duration-300">
             
-            {/* Main Card */}
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up">
+            {/* Background Blobs Animation */}
+            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-300 dark:bg-purple-900/40 rounded-full blur-[120px] opacity-30 animate-pulse"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-300 dark:bg-blue-900/40 rounded-full blur-[120px] opacity-30 animate-pulse delay-700"></div>
+
+            {/* Main Container */}
+            <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                transition={{ duration: 0.5 }}
+                className="w-full max-w-5xl bg-white dark:bg-gray-800 rounded-3xl shadow-2xl dark:shadow-black/50 overflow-hidden grid md:grid-cols-2 z-10 border border-transparent dark:border-gray-700"
+            >
                 
-                {/* Header Section */}
-                <div className="bg-gray-900 p-8 text-center">
-                    <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 tracking-wider">
-                        OMS <span className="text-white text-2xl">Login</span>
-                    </h2>
-                    <p className="text-gray-400 text-sm mt-2">Office Management System</p>
+                {/* --- LEFT SIDE: BRANDING --- */}
+                <div className="relative bg-gray-900 p-10 flex flex-col justify-between overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-purple-800 opacity-90"></div>
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                    
+                    <div className="relative z-10">
+                        <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center text-white font-bold text-xl mb-6 shadow-inner">
+                            M
+                        </div>
+                        <h1 className="text-4xl font-extrabold text-white tracking-tight leading-tight">
+                            Manage Your <br/> Workspace <span className="text-indigo-300">Efficiently.</span>
+                        </h1>
+                        <p className="text-indigo-100 mt-4 text-sm leading-relaxed max-w-xs">
+                            Manuastro Office Management System handles your payroll, leaves, and tasks in one seamless platform.
+                        </p>
+                    </div>
+
+                    <div className="relative z-10 mt-10">
+                        <div className="flex items-center gap-3">
+                            <div className="flex -space-x-3">
+                                {[1,2,3].map(i => (
+                                    <div key={i} className="w-10 h-10 rounded-full border-2 border-indigo-500 bg-gray-200"></div>
+                                ))}
+                            </div>
+                            <p className="text-white text-xs font-medium">Trusted by teams everywhere</p>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Form Section */}
-                <div className="p-8">
+                {/* --- RIGHT SIDE: FORM --- */}
+                <div className="p-8 md:p-12 flex flex-col justify-center bg-white dark:bg-gray-800 transition-colors duration-300">
                     
-                    {/* Header Title based on Mode */}
-                    <h3 className="text-xl font-bold text-gray-800 mb-6 text-center">
-                        {isResetMode ? "Recover Account" : "Welcome Back"}
-                    </h3>
+                    <div className="mb-8">
+                        <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+                            {isResetMode ? "Reset Password" : "Welcome Back! 👋"}
+                        </h2>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                            {isResetMode ? "Enter your email to receive a recovery link." : "Please enter your details to sign in."}
+                        </p>
+                    </div>
 
-                    {/* Messages */}
-                    {message && (
-                        <div className="mb-4 p-3 bg-green-50 border border-green-100 text-green-600 text-sm rounded-lg font-medium text-center">
-                            {message}
-                        </div>
-                    )}
-                    {error && (
-                        <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg font-medium text-center">
-                            {error}
-                        </div>
-                    )}
+                    {/* Messages Area */}
+                    <AnimatePresence>
+                        {error && (
+                            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-medium flex items-center gap-2 border border-red-100 dark:border-red-800">
+                                <AlertTriangle size={16} /> {error}
+                            </motion.div>
+                        )}
+                        {message && (
+                            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm font-medium flex items-center gap-2 border border-emerald-100 dark:border-emerald-800">
+                                <CheckCircle size={16} /> {message}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     <form className="space-y-5">
-                        {/* Email Field */}
+                        
+                        {/* Email Input */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                            <input
-                                type="email"
-                                placeholder="name@company.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                            />
+                            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase mb-1">Email Address</label>
+                            <div className="relative group">
+                                <Mail className="absolute left-3 top-3.5 text-gray-400 dark:text-gray-500 group-focus-within:text-indigo-600 dark:group-focus-within:text-indigo-400 transition-colors" size={18} />
+                                <input 
+                                    type="email" 
+                                    placeholder="you@manuastro.com" 
+                                    value={email} 
+                                    onChange={(e) => setEmail(e.target.value)} 
+                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent outline-none transition-all font-medium text-gray-700 dark:text-white" 
+                                />
+                            </div>
                         </div>
 
-                        {/* 🔄 CONDITIONAL RENDERING */}
-                        {!isResetMode ? (
-                            <>
-                                {/* --- LOGIN MODE --- */}
-                                <div>
-                                    <div className="flex justify-between items-center mb-1">
-                                        <label className="block text-sm font-medium text-gray-700">Password</label>
-                                        <button 
-                                            type="button" 
-                                            onClick={() => { setIsResetMode(true); setError(''); setMessage(''); }}
-                                            className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
-                                        >
-                                            Forgot Password?
-                                        </button>
-                                    </div>
-                                    <input
-                                        type="password"
-                                        placeholder="••••••••"
-                                        value={password}
-                                        autoComplete="current-password"
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        required
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                        {/* Password Input (Only for Login) */}
+                        {!isResetMode && (
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">Password</label>
+                                    <button type="button" onClick={() => { setIsResetMode(true); setError(''); }} className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300">
+                                        Forgot Password?
+                                    </button>
+                                </div>
+                                <div className="relative group">
+                                    <Lock className="absolute left-3 top-3.5 text-gray-400 dark:text-gray-500 group-focus-within:text-indigo-600 dark:group-focus-within:text-indigo-400 transition-colors" size={18} />
+                                    <input 
+                                        type="password" 
+                                        placeholder="••••••••" 
+                                        value={password} 
+                                        onChange={(e) => setPassword(e.target.value)} 
+                                        className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent outline-none transition-all font-medium text-gray-700 dark:text-white" 
                                     />
                                 </div>
+                            </div>
+                        )}
 
-                                {/* Login Buttons Section */}
-                                <div className="mt-8">
-                                    <p className="text-xs text-gray-400 text-center mb-3 uppercase tracking-wider font-bold">Login As</p>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <button 
-                                            onClick={(e) => handleLogin(e, 'admin')} 
-                                            disabled={loading} 
-                                            className={`px-2 py-3 rounded-lg text-white text-sm font-bold shadow-md transition-transform active:scale-95
-                                            ${loading ? 'opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800'}`}
-                                        >
-                                            Admin
+                        {/* Actions */}
+                        {!isResetMode ? (
+                            <div className="mt-6">
+                                <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase mb-3 text-center tracking-wider">Select Role to Login</p>
+                                <div className="grid grid-cols-1 gap-3">
+                                    
+                                    {/* Admin Button */}
+                                    <button onClick={(e) => handleLogin(e, 'admin')} disabled={loading}
+                                        className="group relative flex items-center justify-between p-3 rounded-xl border border-purple-100 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-600 dark:hover:bg-purple-700 transition-all duration-300">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-white dark:bg-gray-800 rounded-lg text-purple-600 dark:text-purple-400 shadow-sm"><Shield size={18} /></div>
+                                            <span className="font-bold text-purple-900 dark:text-purple-300 group-hover:text-white">Admin Access</span>
+                                        </div>
+                                        <ArrowRight size={18} className="text-purple-400 group-hover:text-white transform group-hover:translate-x-1 transition-transform" />
+                                    </button>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {/* HR Button */}
+                                        <button onClick={(e) => handleLogin(e, 'hr')} disabled={loading}
+                                            className="group flex items-center justify-center gap-2 p-3 rounded-xl border border-teal-100 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-500 dark:hover:bg-teal-700 hover:border-teal-500 dark:hover:border-teal-700 transition-all duration-300">
+                                            <Users size={16} className="text-teal-600 dark:text-teal-400 group-hover:text-white" />
+                                            <span className="font-bold text-sm text-teal-900 dark:text-teal-300 group-hover:text-white">HR Login</span>
                                         </button>
 
-                                        <button 
-                                            onClick={(e) => handleLogin(e, 'hr')} 
-                                            disabled={loading} 
-                                            className={`px-2 py-3 rounded-lg text-white text-sm font-bold shadow-md transition-transform active:scale-95
-                                            ${loading ? 'opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700'}`}
-                                        >
-                                            HR
-                                        </button>
-
-                                        <button 
-                                            onClick={(e) => handleLogin(e, 'employee')} 
-                                            disabled={loading} 
-                                            className={`px-2 py-3 rounded-lg text-white text-sm font-bold shadow-md transition-transform active:scale-95
-                                            ${loading ? 'opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'}`}
-                                        >
-                                            Employee
+                                        {/* Employee Button */}
+                                        <button onClick={(e) => handleLogin(e, 'employee')} disabled={loading}
+                                            className="group flex items-center justify-center gap-2 p-3 rounded-xl border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-600 dark:hover:bg-blue-700 hover:border-blue-600 dark:hover:border-blue-700 transition-all duration-300">
+                                            <User size={16} className="text-blue-600 dark:text-blue-400 group-hover:text-white" />
+                                            <span className="font-bold text-sm text-blue-900 dark:text-blue-300 group-hover:text-white">Employee Login</span>
                                         </button>
                                     </div>
-                                    {loading && <p className="text-center text-xs text-gray-400 mt-2">Authenticating...</p>}
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                {/* --- RESET PASSWORD MODE --- */}
-                                <button 
-                                    onClick={handlePasswordReset} 
-                                    disabled={loading}
-                                    className={`w-full py-3 rounded-lg text-white font-bold shadow-lg transition-all
-                                    ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:shadow-xl'}`}
-                                >
-                                    {loading ? 'Sending Link...' : 'Send Reset Link'}
-                                </button>
 
-                                <button 
-                                    type="button"
-                                    onClick={() => { setIsResetMode(false); setError(''); setMessage(''); }}
-                                    className="w-full mt-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3 pt-2">
+                                <button onClick={handlePasswordReset} disabled={loading}
+                                    className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 dark:hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 transition-all flex justify-center items-center gap-2">
+                                    {loading ? 'Sending...' : 'Send Recovery Link'} <ArrowRight size={18} />
+                                </button>
+                                <button type="button" onClick={() => setIsResetMode(false)} className="w-full py-3 rounded-xl text-gray-500 dark:text-gray-400 font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm">
                                     Back to Login
                                 </button>
-                            </>
+                            </div>
                         )}
                     </form>
                 </div>
-                
-                {/* Footer Decor */}
-                <div className="h-1.5 bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 w-full"></div>
-            </div>
-            
-            {/* Simple Footer */}
-            <div className="fixed bottom-4 text-center text-xs text-gray-400">
-                © 2025 Manuastro Systems. All rights reserved.
+            </motion.div>
+
+            {/* Footer */}
+            <div className="absolute bottom-4 text-center w-full text-xs text-gray-400 dark:text-gray-500 font-medium">
+                © 2025 Manuastro Systems. Secure & Encrypted.
             </div>
         </div>
     );

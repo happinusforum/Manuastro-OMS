@@ -3,6 +3,10 @@
 import React, { useState, useMemo } from 'react';
 import { useFirestore } from '../../hooks/useFirestore';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { 
+    Download, Calendar, User, FileText, CheckCircle, XCircle, 
+    Clock, AlertTriangle, Briefcase 
+} from 'lucide-react';
 
 function MonthlyAttendanceReport() {
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
@@ -19,7 +23,7 @@ function MonthlyAttendanceReport() {
     
     const { data: allRecords, loading } = useFirestore('attendance', attendanceFilters);
 
-    // 3. Filter & Calculate Stats (UNCHANGED)
+    // 3. Filter & Calculate Stats (Logic Unchanged)
     const reportData = useMemo(() => {
         if (!allRecords || !selectedMonth) return { days: [], stats: {} };
 
@@ -42,7 +46,7 @@ function MonthlyAttendanceReport() {
         return { days: sortedDays, stats };
     }, [allRecords, selectedMonth]);
 
-    // 🌟 4. CSV Export Logic (UNCHANGED)
+    // 🌟 4. CSV Export Logic
     const exportToCSV = () => {
         if (!reportData.days.length) {
             alert("No data to export!");
@@ -81,37 +85,41 @@ function MonthlyAttendanceReport() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50/50 p-6">
+        <div className="min-h-screen bg-gray-50/50 dark:bg-gray-900 p-6 md:p-8 transition-colors duration-300">
             
             {/* --- HEADER --- */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Monthly Reports</h2>
-                    <p className="text-sm text-gray-500 mt-1">Generate and export detailed attendance logs.</p>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Monthly Reports</h1>
+                    <p className="text-gray-500 dark:text-gray-400 mt-2 flex items-center gap-2">
+                        <FileText size={16} /> Generate and export detailed attendance logs.
+                    </p>
                 </div>
                 
                 {reportData.days.length > 0 && (
                     <button 
                         onClick={exportToCSV}
-                        className="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 font-medium active:scale-95"
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl shadow-md hover:shadow-lg transition-all font-semibold active:scale-95"
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Export CSV
+                        <Download size={18} /> Export CSV
                     </button>
                 )}
             </div>
 
             {/* --- FILTERS TOOLBAR --- */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-8 flex flex-col md:flex-row gap-4 items-end">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 mb-8 grid grid-cols-1 md:grid-cols-2 gap-6 items-end transition-colors duration-300">
                 
                 {/* Employee Selector */}
-                <div className="w-full md:w-1/3">
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Select Employee</label>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Select Employee</label>
                     <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                            <User size={18} />
+                        </div>
                         <select 
                             value={selectedEmployeeId}
                             onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"
+                            className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer transition-all hover:border-indigo-300 font-medium text-gray-700 dark:text-gray-200"
                         >
                             <option value="" disabled>-- Choose Employee --</option>
                             {employees?.map(emp => (
@@ -120,46 +128,53 @@ function MonthlyAttendanceReport() {
                                 </option>
                             ))}
                         </select>
-                        <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-500">▼</div>
+                        <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-400 text-xs">▼</div>
                     </div>
                 </div>
 
                 {/* Month Selector */}
-                <div className="w-full md:w-1/4">
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Select Month</label>
-                    <input 
-                        type="month" 
-                        value={selectedMonth}
-                        onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Select Month</label>
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                            <Calendar size={18} />
+                        </div>
+                        <input 
+                            type="month" 
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(e.target.value)}
+                            className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none transition-all hover:border-indigo-300 font-medium text-gray-700 dark:text-gray-200 dark:[color-scheme:dark]"
+                        />
+                    </div>
                 </div>
             </div>
 
             {/* --- REPORT CONTENT --- */}
             {selectedEmployeeId ? (
                 loading ? (
-                    <div className="py-20"><LoadingSpinner message="Generating Report..." size="40px" /></div>
+                    <div className="h-64 flex justify-center items-center bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                        <LoadingSpinner message="Generating Report..." size="40px" />
+                    </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         
-                        {/* LEFT: SUMMARY CARD (Sticky) */}
-                        <div className="lg:col-span-1">
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-6">
-                                <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                    📊 Monthly Summary
+                        {/* LEFT: SUMMARY STATS (Sticky) */}
+                        <div className="lg:col-span-1 space-y-6">
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 sticky top-6 transition-colors duration-300">
+                                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2 border-b border-gray-100 dark:border-gray-700 pb-4">
+                                    📊 Monthly Overview
                                 </h3>
                                 
                                 <div className="space-y-4">
-                                    <StatRow label="Present" value={reportData.stats.present} icon="✅" color="text-green-600" bg="bg-green-50" />
-                                    <StatRow label="Absent" value={reportData.stats.absent} icon="❌" color="text-red-600" bg="bg-red-50" />
-                                    <StatRow label="Late" value={reportData.stats.late} icon="⏰" color="text-orange-600" bg="bg-orange-50" />
-                                    <StatRow label="Leaves" value={reportData.stats.leave} icon="🏖️" color="text-blue-600" bg="bg-blue-50" />
-                                    <StatRow label="Half Days" value={reportData.stats.halfDay} icon="🌗" color="text-purple-600" bg="bg-purple-50" />
+                                    <StatCard label="Present" value={reportData.stats.present} icon={<CheckCircle size={20} />} color="text-emerald-600 dark:text-emerald-400" bg="bg-emerald-50 dark:bg-emerald-900/20" border="border-emerald-100 dark:border-emerald-800" />
+                                    <StatCard label="Absent" value={reportData.stats.absent} icon={<XCircle size={20} />} color="text-rose-600 dark:text-rose-400" bg="bg-rose-50 dark:bg-rose-900/20" border="border-rose-100 dark:border-rose-800" />
+                                    <StatCard label="Late" value={reportData.stats.late} icon={<Clock size={20} />} color="text-amber-600 dark:text-amber-400" bg="bg-amber-50 dark:bg-amber-900/20" border="border-amber-100 dark:border-amber-800" />
+                                    <StatCard label="Leaves" value={reportData.stats.leave} icon={<Briefcase size={20} />} color="text-blue-600 dark:text-blue-400" bg="bg-blue-50 dark:bg-blue-900/20" border="border-blue-100 dark:border-blue-800" />
+                                    <StatCard label="Half Days" value={reportData.stats.halfDay} icon={<AlertTriangle size={20} />} color="text-purple-600 dark:text-purple-400" bg="bg-purple-50 dark:bg-purple-900/20" border="border-purple-100 dark:border-purple-800" />
                                     
-                                    <div className="pt-4 mt-2 border-t border-gray-100 flex justify-between items-center">
-                                        <span className="font-bold text-gray-700">Total Days Logged</span>
-                                        <span className="font-mono font-bold text-lg text-gray-900">{reportData.stats.total}</span>
+                                    <div className="pt-4 mt-2 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                                        <span className="font-bold text-gray-600 dark:text-gray-400 text-sm uppercase tracking-wider">Total Logs</span>
+                                        <span className="font-mono font-bold text-2xl text-gray-900 dark:text-white">{reportData.stats.total}</span>
                                     </div>
                                 </div>
                             </div>
@@ -167,37 +182,44 @@ function MonthlyAttendanceReport() {
 
                         {/* RIGHT: DETAILED TABLE */}
                         <div className="lg:col-span-2">
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors duration-300">
+                                <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-700/30">
+                                    <h3 className="font-bold text-gray-800 dark:text-white text-lg">Detailed Logs</h3>
+                                </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full whitespace-nowrap text-left">
-                                        <thead className="bg-gray-50 border-b border-gray-100">
+                                        <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
                                             <tr>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Date</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Day</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Time In</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Time Out</th>
-                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Date</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Day</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Check In</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Check Out</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase text-right">Status</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-100">
+                                        <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                                             {reportData.days.length > 0 ? (
                                                 reportData.days.map((record) => (
-                                                    <tr key={record.id} className="hover:bg-gray-50 transition-colors">
-                                                        <td className="px-6 py-4 font-medium text-gray-800">{record.date}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-500">
+                                                    <tr key={record.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors">
+                                                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-200">{record.date}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                                                             {new Date(record.date).toLocaleDateString('en-US', { weekday: 'long' })}
                                                         </td>
-                                                        <td className="px-6 py-4 font-mono text-sm text-gray-600">{record.timeIn || '-'}</td>
-                                                        <td className="px-6 py-4 font-mono text-sm text-gray-600">{record.timeOut || '-'}</td>
-                                                        <td className="px-6 py-4">
+                                                        <td className="px-6 py-4 font-mono text-sm text-gray-600 dark:text-gray-300">{record.timeIn || '-'}</td>
+                                                        <td className="px-6 py-4 font-mono text-sm text-gray-600 dark:text-gray-300">{record.timeOut || '-'}</td>
+                                                        <td className="px-6 py-4 text-right">
                                                             <StatusBadge status={record.status} />
                                                         </td>
                                                     </tr>
                                                 ))
                                             ) : (
                                                 <tr>
-                                                    <td colSpan="5" className="p-12 text-center text-gray-400 italic">
-                                                        No attendance records found for this period.
+                                                    <td colSpan="5" className="p-12 text-center">
+                                                        <div className="flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
+                                                            <FileText size={48} className="mb-4 opacity-20" />
+                                                            <p className="text-lg font-medium text-gray-500 dark:text-gray-400">No records found.</p>
+                                                            <p className="text-sm">Try selecting a different month.</p>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             )}
@@ -209,10 +231,12 @@ function MonthlyAttendanceReport() {
                     </div>
                 )
             ) : (
-                <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border-2 border-dashed border-gray-200">
-                    <span className="text-4xl mb-4">👆</span>
-                    <h3 className="text-lg font-bold text-gray-700">Select an Employee</h3>
-                    <p className="text-gray-500">Choose an employee from the list above to view their monthly report.</p>
+                <div className="flex flex-col items-center justify-center py-24 bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                    <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400 rounded-full mb-4 animate-bounce">
+                        <User size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">Select an Employee</h3>
+                    <p className="text-gray-500 dark:text-gray-400 mt-2 max-w-sm text-center">Choose an employee and a month from the filters above to generate their attendance report.</p>
                 </div>
             )}
         </div>
@@ -220,26 +244,26 @@ function MonthlyAttendanceReport() {
 }
 
 // 🧱 UI Components
-const StatRow = ({ label, value, icon, color, bg }) => (
-    <div className={`flex justify-between items-center p-3 rounded-lg ${bg}`}>
+const StatCard = ({ label, value, icon, color, bg, border }) => (
+    <div className={`flex justify-between items-center p-4 rounded-xl border ${bg} ${border} transition-transform hover:scale-[1.02]`}>
         <div className="flex items-center gap-3">
-            <span>{icon}</span>
-            <span className="text-sm font-medium text-gray-700">{label}</span>
+            <div className={`p-2 rounded-lg bg-white dark:bg-gray-800 ${color} shadow-sm`}>{icon}</div>
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{label}</span>
         </div>
-        <span className={`font-bold text-lg ${color}`}>{value}</span>
+        <span className={`font-bold text-xl ${color}`}>{value}</span>
     </div>
 );
 
 const StatusBadge = ({ status }) => {
-    const colors = {
-        'Present': 'bg-green-100 text-green-700 border-green-200',
-        'Absent': 'bg-red-100 text-red-700 border-red-200',
-        'Late': 'bg-orange-100 text-orange-700 border-orange-200',
-        'Leave': 'bg-blue-100 text-blue-700 border-blue-200',
-        'Half Day': 'bg-purple-100 text-purple-700 border-purple-200'
+    const styles = {
+        'Present': 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+        'Absent': 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+        'Late': 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+        'Leave': 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+        'Half Day': 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800'
     };
     return (
-        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${colors[status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold border ${styles[status] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600'}`}>
             {status}
         </span>
     );

@@ -1,78 +1,87 @@
 // src/components/ui/NotificationBell.jsx
 
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom'; 
 import { useAuth } from '../../context/AuthContext'; 
-// Ensure path is correct for your project
 import { useFirestore } from '../../hooks/useFirestore'; 
+import { Bell, CheckCircle, XCircle, Clock, Briefcase, Calendar } from 'lucide-react'; 
 
 const NotificationBell = () => {
     const { userProfile } = useAuth();
     const userId = userProfile?.uid;
+    const userRole = userProfile?.role; 
+    
     const [isOpen, setIsOpen] = useState(false); 
-    
-    // --- LOGIC STARTS (NO CHANGES) ---
-    
-    // 💡 FIX 1: Filters stable
+    const navigate = useNavigate(); 
+
+    // Fetch Notifications for current user
     const notificationFilters = useMemo(() => {
         return userId ? [['recipientId', '==', userId]] : [];
     }, [userId]);
 
-    // 💡 FIX 2: Options stable
     const notificationOptions = useMemo(() => {
         return { field: 'createdAt', direction: 'desc' };
     }, []);
     
-    // 💡 Firestore Hook Call
     const { 
         data: notifications, 
         loading, 
         updateDocument 
-    } = useFirestore(
-        'notifications', 
-        notificationFilters, 
-        notificationOptions
-    );
+    } = useFirestore('notifications', notificationFilters, notificationOptions);
 
-    // 💡 Unread count
-    const unreadCount = useMemo(() => {
-        if (!notifications) return 0;
-        return notifications.filter(n => n.status === 'unread').length;
+    // Only count/show 'unread' notifications
+    const unreadNotifications = useMemo(() => {
+        if (!notifications) return [];
+        return notifications.filter(n => n.status === 'unread');
     }, [notifications]);
 
-    // 💡 Mark as read handler
-    const handleNotificationClick = async (notificationId) => {
+    // 🟢 HANDLE CLICK
+    const handleNotificationClick = async (notification) => {
         setIsOpen(false); 
-        const notificationToUpdate = notifications.find(n => n.id === notificationId);
 
-        if (notificationToUpdate && notificationToUpdate.status === 'unread') {
-            try {
-                await updateDocument(notificationId, { status: 'read', readAt: new Date() });
-            } catch (error) {
-                console.error("Failed to mark notification as read:", error);
+        const type = (notification.type || '').toLowerCase(); 
+
+        if (type.includes('task')) {
+            navigate('/employee/my-tasks');
+        } 
+        else if (type.includes('leave')) {
+            if (userRole === 'admin' || userRole === 'hr') {
+                navigate('/hr/leave-requests');
+            } 
+            else {
+                navigate('/my-leaves'); 
             }
+        } 
+        else {
+            navigate('/employee/dashboard');
+        }
+
+        try {
+            await updateDocument(notification.id, { status: 'read', readAt: new Date() });
+        } catch (error) {
+            console.error("Failed to mark read:", error);
         }
     };
     
-    // 💡 Helper for Timestamp
     const formatTime = (timestamp) => {
         if (!timestamp) return '';
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    // --- LOGIC ENDS ---
+    const getNotificationIcon = (notif) => {
+        const msg = notif.message?.toLowerCase() || '';
+        const type = notif.type?.toLowerCase() || '';
 
-    // ⏳ LOADING STATE (Spinner instead of Emoji)
-    if (loading) {
-        return (
-            <div className="p-2 text-gray-400 animate-spin">
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-            </div>
-        ); 
-    }
+        if (msg.includes('rejected')) return <XCircle size={18} className="text-red-500" />;
+        if (msg.includes('approved')) return <CheckCircle size={18} className="text-green-500" />;
+        if (type.includes('task')) return <Briefcase size={18} className="text-indigo-500 dark:text-indigo-400" />;
+        if (type.includes('leave')) return <Calendar size={18} className="text-orange-500" />;
+        
+        return <Bell size={18} className="text-gray-500 dark:text-gray-400" />;
+    };
+
+    if (loading) return <div className="p-2 animate-spin text-gray-400 dark:text-gray-500"><Clock size={20}/></div>;
 
     return (
         <div className="relative inline-block">
@@ -80,22 +89,16 @@ const NotificationBell = () => {
             <button 
                 onClick={() => setIsOpen(!isOpen)} 
                 className={`
-                    relative p-2 rounded-full transition-all duration-200 focus:outline-none
-                    ${isOpen ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}
+                    relative p-2 rounded-xl transition-all duration-200 focus:outline-none 
+                    ${isOpen 
+                        ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' 
+                        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'}
                 `}
             >
-                {/* SVG Bell Icon */}
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
+                <Bell size={22} />
 
-                {/* 🔴 BADGE (Unread Count) */}
-                {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 ring-2 ring-gray-900">
-                        <span className="text-[10px] font-bold text-white leading-none">
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
-                        {/* Optional Pulse Effect */}
+                {unreadNotifications.length > 0 && (
+                    <span className="absolute top-1.5 right-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900">
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
                     </span>
                 )}
@@ -104,65 +107,62 @@ const NotificationBell = () => {
             {/* 🔽 DROPDOWN MENU */}
             {isOpen && (
                 <>
-                    {/* Backdrop for mobile to close when clicking outside (Transparent) */}
-                    <div 
-                        className="fixed inset-0 z-40 cursor-default" 
-                        onClick={() => setIsOpen(false)}
-                    ></div>
+                    <div className="fixed inset-0 z-40 cursor-default" onClick={() => setIsOpen(false)}></div>
 
-                    <div className="absolute right-0 mt-3 w-80 max-w-[90vw] bg-white rounded-xl shadow-2xl ring-1 ring-black ring-opacity-5 z-50 overflow-hidden origin-top-right transform transition-all">
+                    <div className="absolute right-0 mt-3 w-80 max-w-[90vw] bg-white dark:bg-gray-800 rounded-2xl shadow-xl ring-1 ring-black ring-opacity-5 dark:ring-white dark:ring-opacity-10 dark:border dark:border-gray-700 z-50 overflow-hidden transform origin-top-right transition-all">
+                        
                         {/* Header */}
-                        <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-                            <h4 className="text-sm font-bold text-gray-700">Notifications</h4>
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">
-                                {unreadCount} New
-                            </span>
+                        <div className="px-5 py-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                            <h4 className="text-sm font-bold text-gray-800 dark:text-gray-100">Notifications</h4>
+                            {unreadNotifications.length > 0 && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">
+                                    {unreadNotifications.length} New
+                                </span>
+                            )}
                         </div>
                         
                         {/* List */}
-                        <div className="max-h-96 overflow-y-auto custom-scrollbar">
-                            {!notifications || notifications.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-8 text-gray-400">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                                    </svg>
-                                    <p className="text-sm">No new notifications</p>
+                        <div className="max-h-[24rem] overflow-y-auto custom-scrollbar bg-gray-50/50 dark:bg-gray-900/50">
+                            {unreadNotifications.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-10 text-gray-400 dark:text-gray-500">
+                                    <Bell size={32} className="opacity-20 mb-2" />
+                                    <p className="text-xs font-medium">No new notifications</p>
                                 </div>
                             ) : (
-                                notifications.slice(0, 7).map(notif => (
+                                unreadNotifications.map(notif => (
                                     <div 
                                         key={notif.id} 
-                                        onClick={() => handleNotificationClick(notif.id)}
-                                        className={`
-                                            px-4 py-3 cursor-pointer border-b border-gray-100 last:border-0 transition-colors duration-150
-                                            hover:bg-gray-50
-                                            ${notif.status === 'unread' ? 'bg-blue-50/60' : 'bg-white'}
-                                        `}
+                                        onClick={() => handleNotificationClick(notif)}
+                                        className="px-5 py-4 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-white dark:hover:bg-gray-700/50 transition-colors duration-150 group relative"
                                     >
-                                        <div className="flex gap-3">
-                                            {/* Status Dot */}
-                                            <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${notif.status === 'unread' ? 'bg-blue-500' : 'bg-transparent'}`}></div>
+                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 dark:bg-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                        <div className="flex gap-4">
+                                            {/* Icon */}
+                                            <div className="mt-0.5 shrink-0 bg-white dark:bg-gray-700 p-1.5 rounded-full shadow-sm border border-gray-100 dark:border-gray-600 h-fit">
+                                                {getNotificationIcon(notif)}
+                                            </div>
                                             
+                                            {/* Text */}
                                             <div className="flex-1">
-                                                <p className={`text-sm ${notif.status === 'unread' ? 'font-semibold text-gray-800' : 'text-gray-600'}`}>
-                                                    {notif.message}
-                                                </p>
-                                                <p className="text-[11px] text-gray-400 mt-1">
-                                                    {formatTime(notif.createdAt)}
+                                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-snug">{notif.message}</p>
+                                                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 flex items-center gap-1">
+                                                    <Clock size={10} /> {formatTime(notif.createdAt)}
                                                 </p>
                                             </div>
+                                            {/* Dot */}
+                                            <div className="mt-2 h-2 w-2 shrink-0 rounded-full bg-indigo-500 dark:bg-indigo-400 shadow-sm shadow-indigo-200 dark:shadow-none"></div>
                                         </div>
                                     </div>
                                 ))
                             )}
                         </div>
                         
-                        {/* Footer (Optional View All) */}
-                        <div className="bg-gray-50 px-4 py-2 text-center border-t border-gray-100">
-                             {/* Functionality nahi thi pehle, isliye disabled style mein rakha hai bas UI fill karne ke liye, 
-                                 agar page ho to Link laga dena */}
-                            <span className="text-xs text-gray-400 cursor-default">Recent Updates</span>
-                        </div>
+                        {/* Footer */}
+                        {unreadNotifications.length > 0 && (
+                            <div className="bg-gray-50 dark:bg-gray-900 p-2 text-center border-t border-gray-100 dark:border-gray-700">
+                                <span className="text-[10px] text-gray-400 dark:text-gray-500">Click to mark as read</span>
+                            </div>
+                        )}
                     </div>
                 </>
             )}

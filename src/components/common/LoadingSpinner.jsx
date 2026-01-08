@@ -1,37 +1,62 @@
-// src/components/common/LoadingSpinner.jsx (MODERN UI + TAILWIND ANIMATION)
+// src/components/common/LoadingSpinner.jsx
 
 import React from 'react';
+import { motion } from 'framer-motion';
 
-function LoadingSpinner({ message = "Loading data...", fullScreen = false }) {
+function LoadingSpinner({ message = "Just a moment...", fullScreen = false }) {
     
     // 💡 Container Style Logic
-    // Agar 'fullScreen' prop true hai, toh poori screen cover karega (overlay).
-    // Nahi toh, jis div mein hai wahan center hoga.
+    // Added dark:bg-gray-900/60 for dark mode overlay
     const containerClasses = fullScreen 
-        ? "fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm transition-all duration-300"
-        : "flex flex-col items-center justify-center py-10 w-full";
+        ? "fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-md transition-all duration-300"
+        : "flex flex-col items-center justify-center py-12 w-full h-full min-h-[200px]";
 
     return (
         <div className={containerClasses}>
-            {/* 🌀 Modern Spinner Ring */}
-            <div className="relative w-12 h-12 md:w-16 md:h-16">
-                {/* Background Ring (Faint) */}
-                <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
+            
+            {/* 🌀 Animation Container */}
+            <div className="relative flex items-center justify-center w-20 h-20">
                 
-                {/* Spinning Ring (Color) */}
-                <div className="absolute inset-0 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                
-                {/* Optional: Inner Pulse Dot */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-ping"></div>
-                </div>
+                {/* Outer Ring (Gradient & Spinning) */}
+                {/* Added dark:border-t-indigo-400 dark:border-r-purple-400 */}
+                <motion.span
+                    className="absolute w-full h-full border-4 border-transparent border-t-indigo-600 dark:border-t-indigo-400 border-r-purple-600 dark:border-r-purple-400 rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                />
+
+                {/* Inner Ring (Reverse Spin & Slower) */}
+                {/* Added dark:border-b-pink-400 dark:border-l-rose-400 */}
+                <motion.span
+                    className="absolute w-3/4 h-3/4 border-4 border-transparent border-b-pink-500 dark:border-b-pink-400 border-l-rose-500 dark:border-l-rose-400 rounded-full opacity-70"
+                    animate={{ rotate: -360 }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                />
+
+                {/* Center Pulse Dot */}
+                {/* Added dark:bg-indigo-400 */}
+                <motion.div
+                    className="w-3 h-3 bg-indigo-600 dark:bg-indigo-400 rounded-full shadow-lg shadow-indigo-500/50 dark:shadow-indigo-400/50"
+                    animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                />
             </div>
 
-            {/* 📝 Loading Text with Pulse Effect */}
+            {/* 📝 Modern Text with Typing/Fade Effect */}
             {message && (
-                <p className="mt-4 text-sm md:text-base font-semibold text-gray-600 animate-pulse tracking-wide">
+                <motion.p 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    // Added dark:from-indigo-400 dark:to-purple-400 for lighter text in dark mode
+                    className="mt-6 text-sm font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 tracking-wider uppercase"
+                >
                     {message}
-                </p>
+                    <motion.span
+                        animate={{ opacity: [0, 1, 0] }}
+                        transition={{ repeat: Infinity, duration: 1.5 }}
+                    >...</motion.span>
+                </motion.p>
             )}
         </div>
     );
