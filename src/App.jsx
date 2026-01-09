@@ -3,10 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { db } from './Firebase'; // Ensure correct path
+import { db } from './Firebase'; 
 import { doc, onSnapshot } from 'firebase/firestore'; 
 
 // Pages & Components Imports
+import InvoiceRecords from './pages/admin/InvoiceRecords';
+import Accounting from './pages/admin/Accounting';
 import LoginPage from './pages/authen/LoginPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import HRDashboard from './pages/hr/HRDashboard';
@@ -26,6 +28,11 @@ import SharedDocs from './components/common/SharedDocs';
 import MyLeaveStatus from './pages/employee/MyLeaveStatus';
 import Settings from './pages/admin/Settings';
 import MaintenancePage from './pages/shared/MaintenancePage'; 
+import PayrollRecords from './pages/hr/PayrollRecords';
+// 🚀 NEW HARDCORE COMPONENTS IMPORTS
+import EnterprisePayroll from './pages/hr/EnterprisePayroll'; // ✅ UPDATED: Replaced AdvancedPayroll
+import InvoiceGenerator from './pages/admin/InvoiceGenerator'; 
+import InventoryManager from './pages/admin/InventoryManager'; 
 
 import AuthGuard from './components/auth/AuthGuard'; 
 import Sidebar from './components/common/Sidebar';
@@ -42,17 +49,15 @@ function App() {
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
     // ✅ 1. DARK MODE LISTENER
-    // Automatically applies 'dark' class to <html> based on user profile preference
     useEffect(() => {
         if (userProfile?.darkMode) {
             document.documentElement.classList.add('dark');
         } else {
             document.documentElement.classList.remove('dark');
         }
-    }, [userProfile]); // Dependency: userProfile
+    }, [userProfile]);
 
     // 🔥 2. GLOBAL MAINTENANCE LISTENER
-    // Watches Firestore settings in real-time. Logs out non-admins if maintenance is ON.
     useEffect(() => {
         if (currentUser) {
             const unsub = onSnapshot(doc(db, 'settings', 'global'), async (docSnap) => {
@@ -67,7 +72,7 @@ function App() {
                     }
                 }
             });
-            return () => unsub(); // Cleanup listener on unmount
+            return () => unsub(); 
         }
     }, [currentUser, userProfile, logout, navigate]);
 
@@ -80,7 +85,6 @@ function App() {
     }
 
     return (
-        // Add dark:bg-gray-900 to main container for global dark background
         <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden transition-colors duration-300">
             
             {/* 🌟 SIDEBAR */}
@@ -106,16 +110,27 @@ function App() {
                         <Route path="/login" element={!currentUser ? <LoginPage /> : <Navigate to="/employee/dashboard" />} />
                         
                         <Route path="/maintenance" element={<MaintenancePage />} />
+                        
+                        {/* Accounting Hub */}
+                        <Route path="/admin/accounting" element={<AuthGuard allowedRoles={['admin', 'hr']}><Accounting /></AuthGuard>} />
 
                         {/* Admin Routes */}
+                        <Route path="/admin/invoice-records" element={<AuthGuard allowedRoles={['admin']}><InvoiceRecords /></AuthGuard>} />
                         <Route path="/admin/dashboard" element={<AuthGuard allowedRoles={['admin']}><AdminDashboard /></AuthGuard>} />
                         <Route path="/admin/user-management" element={<AuthGuard allowedRoles={['admin']}><UserManagement /></AuthGuard>} />
+                        <Route path="/admin/invoice-generator" element={<AuthGuard allowedRoles={['admin']}><InvoiceGenerator /></AuthGuard>} />
+                        <Route path="/admin/inventory-manager" element={<AuthGuard allowedRoles={['admin']}><InventoryManager /></AuthGuard>} />
                         
                         {/* HR Routes */}
+                        <Route path="/hr/payroll-records" element={ <AuthGuard allowedRoles={['hr', 'admin']}> <PayrollRecords /></AuthGuard>  } />
                         <Route path="/hr/dashboard" element={<AuthGuard allowedRoles={['hr', 'admin']}><HRDashboard /></AuthGuard>} />
                         <Route path="/hr/leave-requests" element={<AuthGuard allowedRoles={['hr', 'admin']}><LeaveRequest /></AuthGuard>} />
                         <Route path="/hr/attendance-records" element={<AuthGuard allowedRoles={['hr', 'admin']}><AttendanceRecord /></AuthGuard>} />
                         <Route path="/hr/payroll-management" element={<AuthGuard allowedRoles={['hr', 'admin']}><PayrollManagement /></AuthGuard>} />
+                        
+                        {/* ✅ UPDATED ROUTE: Maps to EnterprisePayroll now */}
+                        <Route path="/hr/advanced-payroll" element={<AuthGuard allowedRoles={['hr', 'admin']}><EnterprisePayroll /></AuthGuard>} />
+                        
                         <Route path="/hr/leave-report" element={<AuthGuard allowedRoles={['hr', 'admin']}><MonthlyLeaveReport /></AuthGuard>} />
                         <Route path="/hr/monthly-report" element={<AuthGuard allowedRoles={['hr', 'admin']}><MonthlyAttendanceReport /></AuthGuard>} />
                         <Route path="/hr/yearly-payoff" element={<AuthGuard allowedRoles={['hr', 'admin']}><YearlyPayoffReport /></AuthGuard>} />

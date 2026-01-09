@@ -3,19 +3,31 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom'; 
 import { useAuth } from '../../context/AuthContext'; 
-import { LayoutDashboard, Users, BarChart3, CalendarCheck, Clock, Banknote, FileBarChart, Coins, Database, FolderOpen, Home, ClipboardList, Send, History, UserCircle, X } from 'lucide-react';
+import { 
+    LayoutDashboard, Users, BarChart3, CalendarCheck, Clock, Banknote, 
+    FileBarChart, Coins, Database, FolderOpen, Home, ClipboardList, 
+    Send, History, UserCircle, X, Wallet 
+} from 'lucide-react';
 
 const navLinks = [
+    // Admin
     { path: '/admin/dashboard', name: 'Admin Dashboard', roles: ['admin'], icon: <LayoutDashboard size={20} /> },
     { path: '/admin/user-management', name: 'User Control', roles: ['admin'], icon: <Users size={20} /> },
+    { path: '/admin/accounting', name: 'Accounting & Finance', roles: ['admin', 'hr', 'employee'], icon: <Wallet size={20} /> }, // <-- NEW ADDITION
+
+    // HR
     { path: '/hr/dashboard', name: 'HR Dashboard', roles: ['hr', 'admin'], icon: <BarChart3 size={20} /> },
     { path: '/hr/leave-requests', name: 'Leave Approval', roles: ['hr', 'admin'], icon: <CalendarCheck size={20} /> },
     { path: '/hr/attendance-records', name: 'Attendance Records', roles: ['hr', 'admin'], icon: <Clock size={20} /> },
     { path: '/hr/payroll-management', name: 'Payroll Management', roles: ['hr', 'admin'], icon: <Banknote size={20} /> },
     { path: '/hr/leave-report', name: 'Leave Reports', roles: ['hr', 'admin'], icon: <FileBarChart size={20} /> },
     { path: '/hr/yearly-payoff', name: 'Yearly Payoff', roles: ['hr', 'admin'], icon: <Coins size={20} /> },
+
+    // Common Tools
     { path: '/office-data', name: 'Office Data / CMS', roles: ['admin', 'hr', 'employee'], icon: <Database size={20} /> },
     { path: '/shared-docs', name: 'Shared Documents', roles: ['admin', 'employee', 'hr'], icon: <FolderOpen size={20} /> },
+
+    // Employee
     { path: '/employee/dashboard', name: 'My Dashboard', roles: ['employee', 'hr', 'admin'], icon: <Home size={20} /> },
     { path: '/employee/my-tasks', name: 'My Tasks', roles: ['employee', 'admin', 'hr'], icon: <ClipboardList size={20} /> },
     { path: '/employee/leave-apply', name: 'Apply Leave/Query', roles: ['employee', 'admin'], icon: <Send size={20} /> },
@@ -27,6 +39,8 @@ function Sidebar({ isOpen, toggleSidebar }) {
     const { userProfile } = useAuth();
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
     const currentRole = userProfile?.role ? userProfile.role.toLowerCase() : 'guest';
+    
+    // Filter logic: Show link if user's role is in the allowed roles list
     const filteredLinks = navLinks.filter(link => link.roles.includes(currentRole));
 
     useEffect(() => {
