@@ -6,7 +6,14 @@ import { useAuth } from './context/AuthContext';
 import { db } from './Firebase'; 
 import { doc, onSnapshot } from 'firebase/firestore'; 
 
+// 🔥 NEW: Activity Tracker Hook
+import { useActivityTracker } from './hooks/useActivityTracker'; 
+
 // Pages & Components Imports
+import KPIManager from './components/common/KPIManager'; 
+import KRAManager from './components/common/KRAManager'; 
+import QuickContact from './components/common/QuickContact'; 
+import LeadsManagementSystem from './components/common/LeadsManagementSystem'; 
 import InvoiceRecords from './pages/admin/InvoiceRecords';
 import Accounting from './pages/admin/Accounting';
 import LoginPage from './pages/authen/LoginPage';
@@ -27,12 +34,22 @@ import YearlyPayoffReport from './pages/hr/YearlyPayoffReport';
 import SharedDocs from './components/common/SharedDocs';
 import MyLeaveStatus from './pages/employee/MyLeaveStatus';
 import Settings from './pages/admin/Settings';
+import ForceStopPage from './pages/shared/ForceStopPage'; 
 import MaintenancePage from './pages/shared/MaintenancePage'; 
 import PayrollRecords from './pages/hr/PayrollRecords';
+
 // 🚀 NEW HARDCORE COMPONENTS IMPORTS
-import EnterprisePayroll from './pages/hr/EnterprisePayroll'; // ✅ UPDATED: Replaced AdvancedPayroll
+import EnterprisePayroll from './pages/hr/EnterprisePayroll'; 
 import InvoiceGenerator from './pages/admin/InvoiceGenerator'; 
 import InventoryManager from './pages/admin/InventoryManager'; 
+import Notepad from './components/common/Notepad';
+// 🔥 APPOINTMENT COMPONENTS
+import Appointment from './components/common/Appointment'; 
+import AppointmentReport from './components/common/AppointmentReport'; 
+
+// 🔥 NEW: LOGS COMPONENTS
+import Logs from './components/common/Logs';
+import LogbookReport from './components/common/LogbookReport';
 
 import AuthGuard from './components/auth/AuthGuard'; 
 import Sidebar from './components/common/Sidebar';
@@ -47,6 +64,9 @@ function App() {
     // Sidebar State
     const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
+    // 🔥 ACTIVATE TRACKER HERE (Starts logging activity automatically)
+    useActivityTracker();
 
     // ✅ 1. DARK MODE LISTENER
     useEffect(() => {
@@ -65,7 +85,8 @@ function App() {
                     const isMaintenance = docSnap.data().maintenanceMode;
                     const myRole = userProfile?.role || 'employee';
 
-                    if (isMaintenance && myRole !== 'admin') {
+                    // Super Admin & Admin bypass maintenance
+                    if (isMaintenance && !['admin', 'super_admin'].includes(myRole)) {
                         console.warn("Maintenance Mode Activated. Logging out...");
                         await logout(); 
                         navigate('/maintenance'); 
@@ -106,54 +127,65 @@ function App() {
                 {/* 🌟 SCROLLABLE PAGE CONTENT */}
                 <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50 dark:bg-gray-900 scroll-smooth custom-scrollbar transition-colors duration-300">
                     <Routes>
+                        {/* Public Routes */}
                         <Route path="/" element={!currentUser ? <LoginPage /> : <Navigate to="/employee/dashboard" />} />
                         <Route path="/login" element={!currentUser ? <LoginPage /> : <Navigate to="/employee/dashboard" />} />
-                        
+                        <Route path="/force-stop" element={<ForceStopPage/>} />
                         <Route path="/maintenance" element={<MaintenancePage />} />
-                        
-                        {/* Accounting Hub */}
-                        <Route path="/admin/accounting" element={<AuthGuard allowedRoles={['admin', 'hr']}><Accounting /></AuthGuard>} />
 
-                        {/* Admin Routes */}
-                        <Route path="/admin/invoice-records" element={<AuthGuard allowedRoles={['admin']}><InvoiceRecords /></AuthGuard>} />
-                        <Route path="/admin/dashboard" element={<AuthGuard allowedRoles={['admin']}><AdminDashboard /></AuthGuard>} />
-                        <Route path="/admin/user-management" element={<AuthGuard allowedRoles={['admin']}><UserManagement /></AuthGuard>} />
-                        <Route path="/admin/invoice-generator" element={<AuthGuard allowedRoles={['admin']}><InvoiceGenerator /></AuthGuard>} />
-                        <Route path="/admin/inventory-manager" element={<AuthGuard allowedRoles={['admin']}><InventoryManager /></AuthGuard>} />
+                        {/* 🛡️ SUPER ADMIN & ADMIN ROUTES */}
+                        <Route path="/admin/dashboard" element={<AuthGuard allowedRoles={['admin', 'super_admin']}><AdminDashboard /></AuthGuard>} />
+                        <Route path="/admin/user-management" element={<AuthGuard allowedRoles={['admin', 'super_admin']}><UserManagement /></AuthGuard>} />
+                        <Route path="/admin/leads-management" element={<AuthGuard allowedRoles={['admin', 'hr', 'super_admin', 'employee']}><LeadsManagementSystem/></AuthGuard>} />
                         
-                        {/* HR Routes */}
-                        <Route path="/hr/payroll-records" element={ <AuthGuard allowedRoles={['hr', 'admin']}> <PayrollRecords /></AuthGuard>  } />
-                        <Route path="/hr/dashboard" element={<AuthGuard allowedRoles={['hr', 'admin']}><HRDashboard /></AuthGuard>} />
-                        <Route path="/hr/leave-requests" element={<AuthGuard allowedRoles={['hr', 'admin']}><LeaveRequest /></AuthGuard>} />
-                        <Route path="/hr/attendance-records" element={<AuthGuard allowedRoles={['hr', 'admin']}><AttendanceRecord /></AuthGuard>} />
-                        <Route path="/hr/payroll-management" element={<AuthGuard allowedRoles={['hr', 'admin']}><PayrollManagement /></AuthGuard>} />
-                        
-                        {/* ✅ UPDATED ROUTE: Maps to EnterprisePayroll now */}
-                        <Route path="/hr/advanced-payroll" element={<AuthGuard allowedRoles={['hr', 'admin']}><EnterprisePayroll /></AuthGuard>} />
-                        
-                        <Route path="/hr/leave-report" element={<AuthGuard allowedRoles={['hr', 'admin']}><MonthlyLeaveReport /></AuthGuard>} />
-                        <Route path="/hr/monthly-report" element={<AuthGuard allowedRoles={['hr', 'admin']}><MonthlyAttendanceReport /></AuthGuard>} />
-                        <Route path="/hr/yearly-payoff" element={<AuthGuard allowedRoles={['hr', 'admin']}><YearlyPayoffReport /></AuthGuard>} />
+                        {/* Accounting & Finance */}
+                        <Route path="/admin/accounting" element={<AuthGuard allowedRoles={['admin', 'hr', 'super_admin', 'employee']}><Accounting /></AuthGuard>} />
+                        <Route path="/admin/invoice-records" element={<AuthGuard allowedRoles={['admin', 'hr', 'super_admin', 'employee']}><InvoiceRecords /></AuthGuard>} />
+                        <Route path="/admin/invoice-generator" element={<AuthGuard allowedRoles={['admin', 'hr', 'super_admin', 'employee']}><InvoiceGenerator /></AuthGuard>} />
+                        <Route path="/admin/inventory-manager" element={<AuthGuard allowedRoles={['admin', 'hr', 'super_admin', 'employee']}><InventoryManager /></AuthGuard>} />
 
-                        {/* Common/Employee Routes */}
-                        <Route path="/office-data" element={<AuthGuard allowedRoles={['admin', 'hr', 'employee']}> <OfficeData /></AuthGuard>}/>
-                        <Route path="/shared-docs" element={<AuthGuard allowedRoles={['admin', 'employee', 'hr']}><SharedDocs /></AuthGuard>} />
-                        <Route path="/employee/dashboard" element={<AuthGuard allowedRoles={['employee', 'hr', 'admin']}><EmployeeDashboard /></AuthGuard>} />
-                        <Route path="/employee/my-tasks" element={<AuthGuard allowedRoles={['employee', 'admin']}><MyTasks /></AuthGuard>} />
-                        <Route path="/employee/leave-apply" element={<AuthGuard allowedRoles={['employee', 'admin']}><LeaveApply /></AuthGuard>} /> 
-                        <Route path="/my-leaves" element={<AuthGuard allowedRoles={['employee', 'admin']}><MyLeaveStatus /></AuthGuard>} />
-                        <Route path="/employee/profile" element={<AuthGuard allowedRoles={['employee', 'hr', 'admin']}><Profile /></AuthGuard>} /> 
+                        {/* Appointments */}
+                        <Route path="/admin/appointments" element={<AuthGuard allowedRoles={['admin', 'hr', 'super_admin', 'employee']}><Appointment /></AuthGuard>} />
+                        <Route path="/admin/appointment-report" element={<AuthGuard allowedRoles={['admin', 'hr', 'super_admin', 'employee']}><AppointmentReport /></AuthGuard>} />
+
+                        {/* 🛡️ HR ROUTES (Accessible by Admin/SuperAdmin too) */}
+                        <Route path="/hr/dashboard" element={<AuthGuard allowedRoles={['hr', 'admin', 'super_admin']}><HRDashboard /></AuthGuard>} />
+                        <Route path="/hr/payroll-management" element={<AuthGuard allowedRoles={['hr', 'admin', 'super_admin']}><PayrollManagement /></AuthGuard>} />
+                        <Route path="/hr/payroll-records" element={<AuthGuard allowedRoles={['hr', 'admin', 'super_admin']}><PayrollRecords /></AuthGuard>} />
+                        <Route path="/hr/advanced-payroll" element={<AuthGuard allowedRoles={['hr', 'admin', 'super_admin']}><EnterprisePayroll /></AuthGuard>} />
+                        <Route path="/hr/attendance-records" element={<AuthGuard allowedRoles={['hr', 'admin', 'super_admin']}><AttendanceRecord /></AuthGuard>} />
+                        <Route path="/hr/leave-requests" element={<AuthGuard allowedRoles={['hr', 'admin', 'super_admin']}><LeaveRequest /></AuthGuard>} /> 
                         
-                        {/* Settings Route */}
-                        <Route 
-                            path="/settings" 
-                            element={
-                                <AuthGuard allowedRoles={['admin', 'hr', 'employee']}>
-                                    <Settings />
-                                </AuthGuard>
-                            } 
-                        />
+                        {/* Reports */}
+                        <Route path="/hr/leave-report" element={<AuthGuard allowedRoles={['hr', 'admin', 'super_admin']}><MonthlyLeaveReport /></AuthGuard>} />
+                        <Route path="/hr/monthly-report" element={<AuthGuard allowedRoles={['hr', 'admin', 'super_admin']}><MonthlyAttendanceReport /></AuthGuard>} />
+                        <Route path="/hr/yearly-payoff" element={<AuthGuard allowedRoles={['hr', 'admin', 'super_admin']}><YearlyPayoffReport /></AuthGuard>} />
+
+                        {/* 🛡️ EMPLOYEE & COMMON ROUTES */}
+                        <Route path="/employee/dashboard" element={<AuthGuard allowedRoles={['employee', 'hr', 'admin', 'super_admin']}><EmployeeDashboard /></AuthGuard>} />
+                        <Route path="/employee/my-tasks" element={<AuthGuard allowedRoles={['employee', 'admin', 'hr', 'super_admin']}><MyTasks /></AuthGuard>} />
+                        <Route path="/employee/leave-apply" element={<AuthGuard allowedRoles={['employee', 'admin', 'super_admin']}><LeaveApply /></AuthGuard>} /> 
+                        <Route path="/my-leaves" element={<AuthGuard allowedRoles={['employee', 'admin', 'super_admin']}><MyLeaveStatus /></AuthGuard>} />
+                        <Route path="/employee/profile" element={<AuthGuard allowedRoles={['employee', 'hr', 'admin', 'super_admin']}><Profile /></AuthGuard>} /> 
+
+                        {/* Shared Tools */}
+                        <Route path="/notepad" element={<AuthGuard allowedRoles={['admin', 'hr', 'employee', 'super_admin']}><Notepad /></AuthGuard>} />
+                        <Route path="/contacts" element={<AuthGuard allowedRoles={['admin', 'hr', 'employee', 'super_admin']}> <QuickContact/></AuthGuard>}/>
+                        <Route path="/office-data" element={<AuthGuard allowedRoles={['admin', 'hr', 'employee', 'super_admin']}> <OfficeData /></AuthGuard>}/>
+                        <Route path="/shared-docs" element={<AuthGuard allowedRoles={['admin', 'employee', 'hr', 'super_admin']}><SharedDocs /></AuthGuard>} />
                         
+                        {/* KRA & KPI */}
+                        <Route path="/kra" element={<AuthGuard allowedRoles={['admin', 'hr', 'employee', 'super_admin']}> <KRAManager /> </AuthGuard> } />
+                        <Route path="/kpi" element={<AuthGuard allowedRoles={['admin', 'hr', 'employee', 'super_admin']}> <KPIManager /> </AuthGuard> } />
+
+                        {/* 🔥 LOGS ROUTES (NEW) */}
+                        <Route path="/logs" element={<AuthGuard allowedRoles={['admin', 'hr', 'employee', 'super_admin']}><Logs /></AuthGuard>} />
+                        <Route path="/admin/log-reports" element={<AuthGuard allowedRoles={['admin', 'super_admin']}><LogbookReport /></AuthGuard>} />
+
+                        {/* Settings */}
+                        <Route path="/settings" element={<AuthGuard allowedRoles={['admin', 'hr', 'employee', 'super_admin']}><Settings /></AuthGuard>} />
+                        
+                        {/* 404 */}
                         <Route path="*" element={<Notfound/>} />
                     </Routes>
                 </main>

@@ -1,16 +1,11 @@
-// src/firebase.js
+// src/Firebase.js
 
-// Firebase App ko initialize karne ke liye function
 import { initializeApp } from "firebase/app";
-
-// Authentication service (login/logout) ke liye function
 import { getAuth } from "firebase/auth"; 
-
-// Firestore Database (data storage) ke liye function
 import { getFirestore } from "firebase/firestore";
 
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
+// 🔥 IMPORTANT: 'export' keyword lagaya hai taaki dusri files is config ko use kar sakein
+export const firebaseConfig = {
   apiKey: "AIzaSyDgFq-X1V2tgGocqVzD_On6yT2OxPrFMOE",
   authDomain: "oms-and-excel-automation.firebaseapp.com",
   projectId: "oms-and-excel-automation",
@@ -20,20 +15,9 @@ const firebaseConfig = {
   measurementId: "G-BKVGN32H8Q"
 };
 
-// src/firebase.js
-// ... (config yahan hai) ...
-
-// 1. Firebase App ko shuru karo (Initialize the app)
+// 1. Firebase App Initialize
 const app = initializeApp(firebaseConfig);
 
-// 2. Ab services ko initialize karke export karo
-// Yehi woh objects hain jinhe tu components mein use karega.
-
-// 'auth' object se login, signup, logout hoga.
+// 2. Services Export
 export const auth = getAuth(app); 
-
-// 'db' object se data read/write hoga.
-export const db = getFirestore(app); 
-
-// Ab tu is file ko apne components mein import kar sakta hai, jaise:
-// import { auth, db } from './firebase';
+export const db = getFirestore(app);

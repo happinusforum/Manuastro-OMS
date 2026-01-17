@@ -3,43 +3,60 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom'; 
 import { useAuth } from '../../context/AuthContext'; 
+
 import { 
     LayoutDashboard, Users, BarChart3, CalendarCheck, Clock, Banknote, 
     FileBarChart, Coins, Database, FolderOpen, Home, ClipboardList, 
-    Send, History, UserCircle, X, Wallet 
+    Send, History, UserCircle, X, Wallet, BookUser, Edit3, Target, 
+    BarChart2, Crown, Activity, FileText 
 } from 'lucide-react';
 
 const navLinks = [
-    // Admin
-    { path: '/admin/dashboard', name: 'Admin Dashboard', roles: ['admin'], icon: <LayoutDashboard size={20} /> },
-    { path: '/admin/user-management', name: 'User Control', roles: ['admin'], icon: <Users size={20} /> },
-    { path: '/admin/accounting', name: 'Accounting & Finance', roles: ['admin', 'hr', 'employee'], icon: <Wallet size={20} /> }, // <-- NEW ADDITION
+    // --- 1. DASHBOARDS (Top Priority) ---
+    { path: '/admin/dashboard', name: 'Admin Dashboard', roles: ['admin', 'super_admin'], icon: <LayoutDashboard size={20} /> },
+    { path: '/hr/dashboard', name: 'HR Dashboard', roles: ['hr', 'admin', 'super_admin'], icon: <BarChart3 size={20} /> },
+    { path: '/employee/dashboard', name: 'My Dashboard', roles: ['employee', 'hr', 'admin', 'super_admin'], icon: <Home size={20} /> },
 
-    // HR
-    { path: '/hr/dashboard', name: 'HR Dashboard', roles: ['hr', 'admin'], icon: <BarChart3 size={20} /> },
-    { path: '/hr/leave-requests', name: 'Leave Approval', roles: ['hr', 'admin'], icon: <CalendarCheck size={20} /> },
-    { path: '/hr/attendance-records', name: 'Attendance Records', roles: ['hr', 'admin'], icon: <Clock size={20} /> },
-    { path: '/hr/payroll-management', name: 'Payroll Management', roles: ['hr', 'admin'], icon: <Banknote size={20} /> },
-    { path: '/hr/leave-report', name: 'Leave Reports', roles: ['hr', 'admin'], icon: <FileBarChart size={20} /> },
-    { path: '/hr/yearly-payoff', name: 'Yearly Payoff', roles: ['hr', 'admin'], icon: <Coins size={20} /> },
+    // --- 2. MANAGEMENT MODULES ---
+    { path: '/admin/user-management', name: 'User Control', roles: ['admin', 'super_admin'], icon: <Users size={20} /> },
+    { path: '/admin/leads-management', name: 'Leads Management', roles: ['admin', 'hr', 'employee', 'super_admin'], icon: <Users size={20} /> },
+    { path: '/admin/accounting', name: 'Accounting & Finance', roles: ['admin', 'hr', 'employee', 'super_admin'], icon: <Wallet size={20} /> },
+    
+    // 🔥 NEW: LOGS REPORT (Admin Only)
+    { path: '/admin/log-reports', name: 'System Log Reports', roles: ['admin', 'super_admin'], icon: <FileText size={20} /> },
 
-    // Common Tools
-    { path: '/office-data', name: 'Office Data / CMS', roles: ['admin', 'hr', 'employee'], icon: <Database size={20} /> },
-    { path: '/shared-docs', name: 'Shared Documents', roles: ['admin', 'employee', 'hr'], icon: <FolderOpen size={20} /> },
+    // --- 3. HR OPERATIONS ---
+    { path: '/hr/payroll-management', name: 'Payroll Management', roles: ['hr', 'admin', 'super_admin'], icon: <Banknote size={20} /> },
+    { path: '/hr/attendance-records', name: 'Attendance Records', roles: ['hr', 'admin', 'super_admin'], icon: <Clock size={20} /> },
+    { path: '/hr/leave-requests', name: 'Leave Approval', roles: ['hr', 'admin', 'super_admin'], icon: <CalendarCheck size={20} /> },
+    { path: '/hr/leave-report', name: 'Leave Reports', roles: ['hr', 'admin', 'super_admin'], icon: <FileBarChart size={20} /> },
+    { path: '/hr/yearly-payoff', name: 'Yearly Payoff', roles: ['hr', 'admin', 'super_admin'], icon: <Coins size={20} /> },
 
-    // Employee
-    { path: '/employee/dashboard', name: 'My Dashboard', roles: ['employee', 'hr', 'admin'], icon: <Home size={20} /> },
-    { path: '/employee/my-tasks', name: 'My Tasks', roles: ['employee', 'admin', 'hr'], icon: <ClipboardList size={20} /> },
-    { path: '/employee/leave-apply', name: 'Apply Leave/Query', roles: ['employee', 'admin'], icon: <Send size={20} /> },
-    { path: '/my-leaves', name: 'My Leave Status', roles: ['employee', 'admin'], icon: <History size={20} /> },
-    { path: '/employee/profile', name: 'My Profile', roles: ['employee', 'hr', 'admin'], icon: <UserCircle size={20} /> },
+    // --- 4. EMPLOYEE SELF-SERVICE ---
+    { path: '/employee/my-tasks', name: 'My Tasks', roles: ['employee', 'admin', 'hr', 'super_admin'], icon: <ClipboardList size={20} /> },
+    { path: '/employee/leave-apply', name: 'Apply Leave/Query', roles: ['employee', 'admin', 'super_admin'], icon: <Send size={20} /> },
+    { path: '/my-leaves', name: 'My Leave Status', roles: ['employee', 'admin', 'super_admin'], icon: <History size={20} /> },
+    
+    // 🔥 NEW: MY ACTIVITY (For Everyone)
+    { path: '/logs', name: 'My Activity Logs', roles: ['employee', 'hr', 'admin', 'super_admin'], icon: <Activity size={20} /> },
+    
+    { path: '/employee/profile', name: 'My Profile', roles: ['employee', 'hr', 'admin', 'super_admin'], icon: <UserCircle size={20} /> },
+
+    // --- 5. COMMON UTILITIES ---
+    { path: '/contacts', name: 'Directory', roles: ['admin', 'hr', 'employee', 'super_admin'], icon: <BookUser size={20}/> },
+    { path: '/office-data', name: 'Office Data / CMS', roles: ['admin', 'hr', 'employee', 'super_admin'], icon: <Database size={20} /> },
+    { path: '/shared-docs', name: 'Shared Documents', roles: ['admin', 'employee', 'hr', 'super_admin'], icon: <FolderOpen size={20} /> },
+    { path: '/kra', name: 'KRA Management', roles: ['admin', 'hr', 'employee', 'super_admin'], icon: <Target size={20} /> },
+    { path: '/notepad', name: 'Daily Notes', roles: ['admin', 'hr', 'employee', 'super_admin'], icon: <Edit3 size={20} /> },
+    { path: '/kpi', name: 'KPI Scorecard', roles: ['admin', 'hr', 'employee', 'super_admin'], icon: <BarChart2 size={20} /> },
 ];
 
 function Sidebar({ isOpen, toggleSidebar }) { 
     const { userProfile } = useAuth();
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
     const currentRole = userProfile?.role ? userProfile.role.toLowerCase() : 'guest';
-    
+    const isSuperAdmin = currentRole === 'super_admin';
+
     // Filter logic: Show link if user's role is in the allowed roles list
     const filteredLinks = navLinks.filter(link => link.roles.includes(currentRole));
 
@@ -77,11 +94,17 @@ function Sidebar({ isOpen, toggleSidebar }) {
 
                 {/* --- ROLE BADGE --- */}
                 <div className="px-5 py-6 shrink-0">
-                    <div className="bg-gray-800/40 dark:bg-gray-800 rounded-xl p-4 border border-gray-700/30 dark:border-gray-700 backdrop-blur-md">
+                    <div className={`rounded-xl p-4 border backdrop-blur-md ${isSuperAdmin ? 'bg-amber-900/20 border-amber-700/50' : 'bg-gray-800/40 border-gray-700/30'}`}>
                         <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-widest mb-2">Logged in as</p>
                         <div className="flex items-center gap-3">
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                            <span className="text-sm font-bold text-gray-100 dark:text-white capitalize tracking-wide">{currentRole}</span>
+                            {isSuperAdmin ? (
+                                <Crown size={18} className="text-amber-500" />
+                            ) : (
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                            )}
+                            <span className={`text-sm font-bold capitalize tracking-wide ${isSuperAdmin ? 'text-amber-400' : 'text-gray-100'}`}>
+                                {currentRole.replace('_', ' ')}
+                            </span>
                         </div>
                     </div>
                 </div>

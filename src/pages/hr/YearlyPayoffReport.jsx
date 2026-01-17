@@ -2,23 +2,39 @@
 
 import React, { useState, useMemo } from 'react';
 import { useFirestore } from '../../hooks/useFirestore';
+import { useAuth } from '../../context/AuthContext'; // 🔥 Auth Import
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { 
     Download, Calendar, User, FileText, Wallet, 
-    TrendingDown, TrendingUp, DollarSign 
+    TrendingDown, TrendingUp, DollarSign, Crown 
 } from 'lucide-react';
 
+// 🔥 Hierarchy Levels
+const ROLE_LEVELS = {
+    'super_admin': 4,
+    'admin': 3,
+    'hr': 2,
+    'employee': 1
+};
+
 function YearlyPayoffReport() {
+    const { userProfile } = useAuth();
+    const currentLevel = ROLE_LEVELS[userProfile?.role] || 0;
+
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
-    // 1. Employees Fetch (Sorted)
-    const employeeFilters = useMemo(() => [['role', '==', 'employee']], []);
-    const { data: rawEmployees } = useFirestore('users', employeeFilters);
+    // 1. Fetch All Users (We filter in JS)
+    const { data: allUsers } = useFirestore('users');
 
+    // 💡 Filter Users Based on Hierarchy
     const employees = useMemo(() => {
-        if (!rawEmployees) return [];
-        return [...rawEmployees].sort((a, b) => {
+        if (!allUsers) return [];
+        return allUsers.filter(u => {
+            const uLevel = ROLE_LEVELS[u.role] || 0;
+            // Standard rule: Show only subordinates
+            return uLevel < currentLevel;
+        }).sort((a, b) => {
             const getNum = (id) => {
                 if (!id) return 9999;
                 const match = id.match(/\d+$/);
@@ -26,7 +42,7 @@ function YearlyPayoffReport() {
             };
             return getNum(a.empId) - getNum(b.empId);
         });
-    }, [rawEmployees]);
+    }, [allUsers, currentLevel]);
 
     // 2. Payroll Records Fetch
     const payrollFilters = useMemo(() => 
@@ -78,7 +94,10 @@ function YearlyPayoffReport() {
             {/* --- HEADER --- */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Annual Payoff Report</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+                        Annual Payoff Report
+                        {userProfile?.role === 'super_admin' && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full border border-amber-200"><Crown size={12} className="inline mr-1"/>Owner</span>}
+                    </h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-2 flex items-center gap-2">
                         <Wallet size={16} /> Consolidated salary reports for the financial year.
                     </p>
@@ -112,7 +131,7 @@ function YearlyPayoffReport() {
                             <option value="">-- Choose Employee --</option>
                             {employees?.map(emp => (
                                 <option key={emp.uid} value={emp.uid}>
-                                    {emp.name} ({emp.empId})
+                                    {emp.name} ({emp.empId || 'N/A'})
                                 </option>
                             ))}
                         </select>
@@ -131,7 +150,7 @@ function YearlyPayoffReport() {
                             type="number" 
                             value={selectedYear} 
                             onChange={(e) => setSelectedYear(e.target.value)} 
-                            className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none transition-all hover:border-indigo-300 font-medium text-gray-700 dark:text-white placeholder-gray-400"
+                            className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none transition-all hover:border-indigo-300 font-medium text-gray-700 dark:text-white placeholder-gray-400 dark:[color-scheme:dark]"
                             placeholder="YYYY"
                         />
                     </div>

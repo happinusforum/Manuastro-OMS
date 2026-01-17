@@ -2,20 +2,36 @@
 
 import React, { useState, useMemo } from 'react';
 import { useFirestore } from '../../hooks/useFirestore';
+import { useAuth } from '../../context/AuthContext'; // 🔥 Import Auth
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { Crown, Shield, User, Briefcase, FileText } from 'lucide-react';
+
+// 🔥 HIERARCHY LEVELS
+const ROLE_LEVELS = {
+    'super_admin': 4,
+    'admin': 3,
+    'hr': 2,
+    'employee': 1
+};
 
 function MonthlyLeaveReport() {
+    const { userProfile } = useAuth(); // Get current user info
+    const currentLevel = ROLE_LEVELS[userProfile?.role] || 0;
+
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
 
-    // 1. Fetch Employees (SORTED LOGIC)
-    const employeeFilters = useMemo(() => [['role', '==', 'employee']], []);
-    const { data: rawEmployees } = useFirestore('users', employeeFilters);
+    // 1. Fetch ALL Users (We filter in JS)
+    const { data: allUsers } = useFirestore('users');
 
-    // 🔥 SORTED EMPLOYEES LIST
+    // 💡 Filter Users Based on Hierarchy
     const employees = useMemo(() => {
-        if (!rawEmployees) return [];
-        return [...rawEmployees].sort((a, b) => {
+        if (!allUsers) return [];
+        return allUsers.filter(u => {
+            const uLevel = ROLE_LEVELS[u.role] || 0;
+            // Show only users BELOW current rank (Standard reporting)
+            return uLevel < currentLevel;
+        }).sort((a, b) => {
             const getNum = (id) => {
                 if (!id) return 9999;
                 const match = id.match(/\d+$/);
@@ -23,7 +39,7 @@ function MonthlyLeaveReport() {
             };
             return getNum(a.empId) - getNum(b.empId);
         });
-    }, [rawEmployees]);
+    }, [allUsers, currentLevel]);
 
     // 2. Fetch Leaves for Selected Employee
     const leavesFilters = useMemo(() => 
@@ -140,7 +156,10 @@ function MonthlyLeaveReport() {
             {/* --- HEADER --- */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Monthly Report</h2>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                        Monthly Leave Report
+                        {userProfile?.role === 'super_admin' && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full border border-amber-200"><Crown size={12} className="inline mr-1"/>Owner</span>}
+                    </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Attendance analysis for Leaves & Travel.</p>
                 </div>
                 
@@ -170,7 +189,7 @@ function MonthlyLeaveReport() {
                             <option value="" disabled>-- Choose Employee --</option>
                             {employees?.map(emp => (
                                 <option key={emp.uid} value={emp.uid}>
-                                    {emp.name} ({emp.empId || 'N/A'})
+                                    {emp.name} ({emp.role.toUpperCase()})
                                 </option>
                             ))}
                         </select>

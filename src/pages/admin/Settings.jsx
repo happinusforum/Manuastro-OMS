@@ -4,15 +4,29 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../Firebase'; 
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'; 
-import { Save, Shield, Bell, Moon, Lock, AlertTriangle, User, Loader2 } from 'lucide-react';
+import { Save, Shield, Bell, Moon, Lock, AlertTriangle, User, Loader2, Crown } from 'lucide-react';
+
+// 🔥 Hierarchy Levels
+const ROLE_LEVELS = {
+    'super_admin': 4,
+    'admin': 3,
+    'hr': 2,
+    'employee': 1
+};
 
 function Settings() {
     const { userProfile, currentUser } = useAuth();
     const role = userProfile?.role || 'guest';
+    const currentLevel = ROLE_LEVELS[role] || 0;
 
+    const isSuperAdmin = role === 'super_admin';
     const isAdmin = role === 'admin';
     const isHR = role === 'hr';
-    // const isEmployee = role === 'employee'; // Not needed for restriction anymore
+
+    // Only Super Admin can EDIT global settings
+    // Admins and HRs can VIEW global settings
+    const canEditGlobal = isSuperAdmin;
+    const canViewGlobal = currentLevel >= 2; // HR, Admin, Super Admin
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -28,28 +42,28 @@ function Settings() {
         const fetchData = async () => {
             setLoading(true);
             try {
-                // Global Settings (Only for Admin/HR)
-                if (isAdmin || isHR) {
+                // Global Settings (Only for privileged roles)
+                if (canViewGlobal) {
                     const snap = await getDoc(doc(db, 'settings', 'global'));
                     if (snap.exists()) {
                         setMaintenanceMode(snap.data().maintenanceMode || false);
                         setMaxLeaves(snap.data().maxLeaves || 20);
                     }
                 }
-                // Personal Settings (For Everyone including Admin)
+                // Personal Settings (For Everyone)
                 if (userProfile) {
                     setEmailNotifs(userProfile.emailNotifs ?? true);
                     setDarkMode(userProfile.darkMode ?? false);
                 }
-            } catch (error) { console.error("Error:", error); } 
+            } catch (error) { console.error("Error fetching settings:", error); } 
             finally { setLoading(false); }
         };
         fetchData();
-    }, [isAdmin, isHR, userProfile]);
+    }, [canViewGlobal, userProfile]);
 
     // 💾 Save Handlers
     const handleSaveSystemSettings = async () => {
-        if (!isAdmin) return;
+        if (!canEditGlobal) return alert("Access Denied: Only Super Admin can change system settings.");
         setSaving(true);
         try {
             await setDoc(doc(db, 'settings', 'global'), { maintenanceMode, maxLeaves: Number(maxLeaves) }, { merge: true });
@@ -61,10 +75,10 @@ function Settings() {
     const handleSavePersonalSettings = async () => {
         setSaving(true);
         try {
-            // Update current user's document
             await updateDoc(doc(db, 'users', currentUser.uid), { emailNotifs, darkMode });
-            // Note: App.jsx listener will automatically pick up darkMode change
             alert("✅ Personal Preferences Saved!");
+            // Reload window to apply dark mode instantly if context doesn't catch it
+            // window.location.reload(); 
         } catch (error) { alert("❌ Failed to save preferences."); } 
         finally { setSaving(false); }
     };
@@ -79,28 +93,30 @@ function Settings() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight flex items-center gap-3">
                         Settings 
-                        <span className={`w-fit text-xs px-3 py-1 rounded-full uppercase tracking-wider border font-bold
-                            ${isAdmin ? 'bg-red-100 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800' : 
+                        <span className={`w-fit text-xs px-3 py-1 rounded-full uppercase tracking-wider border font-bold flex items-center gap-1
+                            ${isSuperAdmin ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800' : 
+                              isAdmin ? 'bg-rose-100 text-rose-600 border-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800' : 
                               isHR ? 'bg-purple-100 text-purple-600 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800' : 
                               'bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'}`}>
-                            {role} View
+                            {isSuperAdmin && <Crown size={12}/>}
+                            {role.replace('_', ' ')} View
                         </span>
                     </h1>
                 </div>
                 <p className="text-gray-500 dark:text-gray-400 mt-2 text-base">
-                    {isAdmin ? 'Manage global system configurations and your personal preferences.' : 'Manage your personal account preferences.'}
+                    {canEditGlobal ? 'Manage global system configurations and your personal preferences.' : 'Manage your personal account preferences.'}
                 </p>
             </div>
 
-            {/* --- ADMIN & HR SECTION (SYSTEM CONFIG) --- */}
-            {(isAdmin || isHR) && (
+            {/* --- GLOBAL CONFIGURATION (Restricted Visibility) --- */}
+            {canViewGlobal && (
                 <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-10 transition-colors duration-300">
                     
                     <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/30 flex justify-between items-center gap-4">
                         <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
                             <Shield size={20} className="text-indigo-600 dark:text-indigo-400" /> Global Configuration
                         </h2>
-                        {isHR && (
+                        {!canEditGlobal && (
                             <span className="text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-3 py-1 rounded-full flex items-center gap-1">
                                 <Lock size={12} /> Read Only
                             </span>
@@ -116,9 +132,9 @@ function Settings() {
                             </div>
                             <div className="relative">
                                 <input 
-                                    type="number" value={maxLeaves} onChange={(e) => setMaxLeaves(e.target.value)} disabled={!isAdmin} 
+                                    type="number" value={maxLeaves} onChange={(e) => setMaxLeaves(e.target.value)} disabled={!canEditGlobal} 
                                     className={`w-full px-4 py-3 border rounded-xl outline-none transition-all font-medium pr-16
-                                        ${isAdmin 
+                                        ${canEditGlobal 
                                             ? 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400' 
                                             : 'border-gray-200 bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-500 cursor-not-allowed'}`}
                                 />
@@ -142,15 +158,15 @@ function Settings() {
                             </div>
                             
                             <div className="flex justify-start md:justify-end">
-                                <label className={`relative inline-flex items-center ${isAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
-                                    <input type="checkbox" checked={maintenanceMode} onChange={(e) => isAdmin && setMaintenanceMode(e.target.checked)} disabled={!isAdmin} className="sr-only peer" />
+                                <label className={`relative inline-flex items-center ${canEditGlobal ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                                    <input type="checkbox" checked={maintenanceMode} onChange={(e) => canEditGlobal && setMaintenanceMode(e.target.checked)} disabled={!canEditGlobal} className="sr-only peer" />
                                     <div className="w-14 h-7 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-indigo-600 shadow-inner"></div>
                                 </label>
                             </div>
                         </div>
                     </div>
 
-                    {isAdmin && (
+                    {canEditGlobal && (
                         <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700 flex justify-end">
                             <button onClick={handleSaveSystemSettings} disabled={saving} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 flex items-center gap-2 active:scale-95 disabled:bg-indigo-400 transition-all">
                                 {saving ? <Loader2 className="animate-spin" size={18}/> : <Save size={18} />} {saving ? 'Saving...' : 'Save Configuration'}
@@ -160,7 +176,7 @@ function Settings() {
                 </div>
             )}
 
-            {/* --- PERSONAL PREFERENCES SECTION (NOW VISIBLE TO ALL: ADMIN, HR, EMPLOYEE) --- */}
+            {/* --- PERSONAL PREFERENCES SECTION (VISIBLE TO ALL) --- */}
             <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors duration-300">
                 <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700/30">
                     <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">

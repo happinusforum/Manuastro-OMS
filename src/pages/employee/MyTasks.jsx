@@ -7,14 +7,23 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore'; 
 import { db } from '../../Firebase'; 
 import * as XLSX from 'xlsx'; 
+import DPRWPRManager from '../../pages/admin/DPRWPRManager'; // 🔥 IMPORTED
 
 // 🎨 Animation & Icons
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Plus, Kanban, FileSpreadsheet, Filter, X, Save, Trash2, 
     Edit3, Calendar, CheckCircle, Clock, AlertCircle, User, Layout, ArrowRight,
-    List, ArrowUp, ArrowDown
+    List, ArrowUp, ArrowDown, TrendingUp, Crown, Shield 
 } from 'lucide-react';
+
+// 🔥 HIERARCHY LEVELS
+const ROLE_LEVELS = {
+    'super_admin': 4,
+    'admin': 3,
+    'hr': 2,
+    'employee': 1
+};
 
 // --- 🎨 HELPER: Modern Priority Badge ---
 const PriorityBadge = ({ priority }) => {
@@ -35,11 +44,15 @@ const PriorityBadge = ({ priority }) => {
 function MyTasks() {
     const { currentUser, userProfile } = useAuth();
     const userId = currentUser?.uid;
-    const userRole = userProfile?.role; 
-    const isAdminOrHR = userRole === 'admin' || userRole === 'hr';
+    const userRole = userProfile?.role || 'employee'; 
+    const currentLevel = ROLE_LEVELS[userRole] || 0;
+
+    // Permissions
+    const canManageTasks = currentLevel >= 3; // Admin & Super Admin
+    const canViewAll = currentLevel >= 2; // HR, Admin, Super Admin
 
     // UI State
-    const [viewMode, setViewMode] = useState('board'); 
+    const [viewMode, setViewMode] = useState('board'); // board, list, report, progress
     const [showMyTasksOnly, setShowMyTasksOnly] = useState(false); 
     const [selectedEmployeeForReport, setSelectedEmployeeForReport] = useState('');
     const [showForm, setShowForm] = useState(false); 
@@ -54,26 +67,28 @@ function MyTasks() {
     const [editingId, setEditingId] = useState(null);
     const [employees, setEmployees] = useState([]);
 
-    // 🔄 Fetch Employees
+    // 🔄 Fetch Employees (Only for Managers)
     useEffect(() => {
-        if (isAdminOrHR) {
+        if (canViewAll) {
             const fetchEmployees = async () => {
                 try {
-                    const q = query(collection(db, "users"), where("role", "in", ["employee", "hr"]));
+                    const q = query(collection(db, "users")); // Fetch all users to assign tasks
                     const snap = await getDocs(q);
                     const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // Filter based on hierarchy: Can assign to anyone below or equal? Usually below.
+                    // Simplified: Admins can assign to anyone.
                     setEmployees(list);
                 } catch (err) { console.error(err); }
             };
             fetchEmployees();
         }
-    }, [isAdminOrHR]);
+    }, [canViewAll]);
 
     // 🔍 FETCH TASKS
     const taskFilters = useMemo(() => {
-        if (isAdminOrHR) return []; 
-        return userId ? [['assignedToId', '==', userId]] : [];
-    }, [userId, isAdminOrHR]);
+        if (canViewAll) return []; // Managers fetch all
+        return userId ? [['assignedToId', '==', userId]] : []; // Employees fetch assigned to them
+    }, [userId, canViewAll]);
 
     const { data: tasks, loading, error, addDocument, updateDocument, deleteDocument } = useFirestore('tasks', taskFilters);
 
@@ -82,7 +97,8 @@ function MyTasks() {
         if (!tasks) return [];
         let filtered = tasks;
 
-        if (isAdminOrHR && showMyTasksOnly) {
+        // "My Tasks Only" toggle for managers
+        if (canViewAll && showMyTasksOnly) {
             filtered = tasks.filter(t => t.assignedToId === userId);
         }
 
@@ -99,7 +115,7 @@ function MyTasks() {
             if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [tasks, isAdminOrHR, showMyTasksOnly, userId, sortConfig]);
+    }, [tasks, canViewAll, showMyTasksOnly, userId, sortConfig]);
 
     const boardTasks = processedTasks;
 
@@ -142,10 +158,11 @@ function MyTasks() {
         let finalAssignedId = currentTask.assignedToId;
         let finalAssignedName = currentTask.assignedToName;
 
-        if (isAdminOrHR && finalAssignedId !== userId) {
+        if (canViewAll && finalAssignedId !== userId) {
             const selectedEmp = employees.find(e => e.id === finalAssignedId);
             finalAssignedName = selectedEmp ? (selectedEmp.name || selectedEmp.email) : 'Unknown';
-        } else if (!isAdminOrHR) {
+        } else if (!canViewAll) {
+            // Employees can only create tasks for themselves (Personal tasks)
             finalAssignedId = userId;
             finalAssignedName = userProfile?.name || 'Me';
         }
@@ -157,6 +174,8 @@ function MyTasks() {
                 await updateDocument(editingId, taskData);
             } else {
                 const docRef = await addDocument({ ...taskData, createdBy: userId, createdAt: new Date() });
+                
+                // Notify if assigned to someone else
                 if (finalAssignedId !== userId) {
                     await addDoc(collection(db, "notifications"), {
                         recipientId: finalAssignedId,
@@ -184,6 +203,8 @@ function MyTasks() {
     
     const handleStatusChange = async (task, newStatus) => { 
         await updateDocument(task.id, { status: newStatus });
+        
+        // Notify creator if task completed by assignee
         if (newStatus === 'Completed' && task.createdBy !== userId) {
              await addDoc(collection(db, "notifications"), {
                 recipientId: task.createdBy,
@@ -227,43 +248,49 @@ function MyTasks() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
                         <h2 className="text-3xl font-extrabold text-gray-800 dark:text-white tracking-tight flex items-center gap-3">
-                            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 text-transparent bg-clip-text">
-                                {isAdminOrHR ? "Team Board" : "My Tasks"}
+                            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 text-transparent bg-clip-text flex items-center gap-2">
+                                {userRole === 'super_admin' && <Crown size={24} className="text-amber-500" />}
+                                {canViewAll ? "Task Management" : "My Tasks"}
                             </span>
                         </h2>
-                        <p className="text-gray-500 dark:text-gray-400 font-medium mt-1">Manage productivity & track progress.</p>
+                        <p className="text-gray-500 dark:text-gray-400 font-medium mt-1">Manage tasks & track progress.</p>
                     </div>
 
                     <div className="flex flex-wrap gap-3 w-full md:w-auto">
                          {/* Toggle View */}
-                        <div className="bg-white dark:bg-gray-800 p-1 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex">
-                            <button onClick={() => setViewMode('board')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'board' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                        <div className="bg-white dark:bg-gray-800 p-1 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex overflow-x-auto">
+                            <button onClick={() => setViewMode('board')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${viewMode === 'board' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                                 <Kanban size={16} /> Board
                             </button>
-                            <button onClick={() => setViewMode('list')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'list' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                            <button onClick={() => setViewMode('list')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${viewMode === 'list' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                                 <List size={16} /> List
                             </button>
-                            {isAdminOrHR && (
-                                <button onClick={() => setViewMode('report')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'report' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-                                    <FileSpreadsheet size={16} /> Reports
+                            <button onClick={() => setViewMode('progress')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${viewMode === 'progress' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                                <TrendingUp size={16} /> Reports
+                            </button>
+
+                            {canViewAll && (
+                                <button onClick={() => setViewMode('report')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${viewMode === 'report' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                                    <FileSpreadsheet size={16} /> Export
                                 </button>
                             )}
                         </div>
 
                         {/* Add Button */}
-                        <button 
-                            onClick={() => setShowForm(true)} 
-                            className="flex-1 md:flex-none bg-gray-900 dark:bg-indigo-600 hover:bg-black dark:hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 active:scale-95"
-                        >
-                            <Plus size={18} /> New Task
-                        </button>
+                        {(viewMode === 'board' || viewMode === 'list') && (
+                            <button 
+                                onClick={() => setShowForm(true)} 
+                                className="flex-1 md:flex-none bg-gray-900 dark:bg-indigo-600 hover:bg-black dark:hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 active:scale-95"
+                            >
+                                <Plus size={18} /> New Task
+                            </button>
+                        )}
                     </div>
                 </div>
 
                 {/* Filters & Sorting Row */}
                 {(viewMode === 'board' || viewMode === 'list') && (
                     <div className="mt-6 flex flex-wrap items-center gap-3">
-                        {/* Sort Button */}
                         <button 
                             onClick={() => handleSort('dueDate')}
                             className="flex items-center gap-2 bg-white dark:bg-gray-800 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-500 transition-all text-sm font-bold text-gray-600 dark:text-gray-300"
@@ -273,7 +300,6 @@ function MyTasks() {
                             {sortConfig.key === 'dueDate' && (sortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
                         </button>
 
-                        {/* Priority Sort */}
                         <button 
                             onClick={() => handleSort('priority')}
                             className="flex items-center gap-2 bg-white dark:bg-gray-800 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-500 transition-all text-sm font-bold text-gray-600 dark:text-gray-300"
@@ -283,22 +309,22 @@ function MyTasks() {
                             {sortConfig.key === 'priority' && (sortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
                         </button>
 
-                        {isAdminOrHR && (
+                        {canViewAll && (
                              <label className="cursor-pointer flex items-center gap-3 bg-white dark:bg-gray-800 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-500 transition-all select-none">
                                 <div className="relative">
                                     <input type="checkbox" className="sr-only" checked={showMyTasksOnly} onChange={() => setShowMyTasksOnly(!showMyTasksOnly)} />
                                     <div className={`w-10 h-6 rounded-full shadow-inner transition-colors ${showMyTasksOnly ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'}`}></div>
                                     <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${showMyTasksOnly ? 'translate-x-4' : ''}`}></div>
                                 </div>
-                                <span className="text-sm font-bold text-gray-600 dark:text-gray-300">Assigned to Me</span>
+                                <span className="text-sm font-bold text-gray-600 dark:text-gray-300">My Tasks Only</span>
                             </label>
                         )}
                     </div>
                 )}
             </div>
 
-            {loading && <div className="py-20"><LoadingSpinner message="Syncing Tasks..." /></div>}
-            {error && <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl mb-6 border border-red-200 dark:border-red-800">{error}</div>}
+            {loading && viewMode !== 'progress' && <div className="py-20"><LoadingSpinner message="Syncing Data..." /></div>}
+            {error && viewMode !== 'progress' && <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl mb-6 border border-red-200 dark:border-red-800">{error}</div>}
 
             {/* --- KANBAN VIEW --- */}
             {viewMode === 'board' && (
@@ -318,7 +344,7 @@ function MyTasks() {
                 </div>
             )}
 
-            {/* --- LIST VIEW (BY DATE) --- */}
+            {/* --- LIST VIEW --- */}
             {viewMode === 'list' && (
                 <div className="max-w-4xl mx-auto space-y-8">
                     {Object.keys(tasksByDate).length === 0 ? (
@@ -346,7 +372,6 @@ function MyTasks() {
                                         {tasksByDate[date].map(task => (
                                             <div key={task.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between group hover:shadow-md transition-all">
                                                 <div className="flex items-center gap-4">
-                                                    {/* Status Circle */}
                                                     <button 
                                                         onClick={() => {
                                                             const nextStatus = task.status === 'Completed' ? 'Pending' : 'Completed';
@@ -378,11 +403,17 @@ function MyTasks() {
                     )}
                 </div>
             )}
+            
+            {/* 🔥 PROGRESS MANAGER VIEW */}
+            {viewMode === 'progress' && (
+                <div className="max-w-7xl mx-auto">
+                    <DPRWPRManager />
+                </div>
+            )}
 
             {/* --- REPORT VIEW --- */}
-            {viewMode === 'report' && isAdminOrHR && (
+            {viewMode === 'report' && canViewAll && (
                 <div className="max-w-7xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    {/* Report Controls */}
                     <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 flex flex-col sm:flex-row justify-between items-end gap-4">
                         <div className="w-full sm:w-auto">
                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 block">Filter by Employee</label>
@@ -403,7 +434,6 @@ function MyTasks() {
                         </button>
                     </div>
                     
-                    {/* Table */}
                     <div className="overflow-x-auto">
                         <table className="w-full text-left whitespace-nowrap">
                             <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 font-bold text-xs uppercase tracking-wider">
@@ -445,20 +475,18 @@ function MyTasks() {
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
                             className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-100 dark:border-gray-700"
                         >
-                            {/* Modal Header */}
                             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/30">
                                 <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{isEditing ? 'Edit Task' : 'New Task'}</h3>
                                 <button onClick={closeForm} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500 dark:text-gray-400 transition-colors"><X size={20} /></button>
                             </div>
 
-                            {/* Modal Body */}
                             <form onSubmit={handleSave} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <div className="md:col-span-2">
                                     <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 block">Title</label>
                                     <input type="text" required className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="Task Name" value={currentTask.title} onChange={(e) => setCurrentTask({ ...currentTask, title: e.target.value })} />
                                 </div>
 
-                                {isAdminOrHR && (
+                                {canViewAll && (
                                     <div>
                                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 block">Assign To</label>
                                         <select className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={currentTask.assignedToId} onChange={(e) => setCurrentTask({ ...currentTask, assignedToId: e.target.value })}>
@@ -503,81 +531,82 @@ function MyTasks() {
     );
 }
 
-// 🧱 MODERN TASK COLUMN (Dark Mode Aware)
-const TaskColumn = ({ title, tasks, headerColor, onStatusChange, onEdit, onDelete, userRole, userId }) => (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200/60 dark:border-gray-700 overflow-hidden">
-        {/* Header */}
-        <div className={`p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center ${headerColor}`}>
-            <h4 className="font-extrabold text-sm uppercase tracking-wide flex items-center gap-2">
-                {title}
-            </h4>
-            <span className="bg-white/50 dark:bg-black/20 px-2 py-0.5 rounded text-xs font-bold">{tasks.length}</span>
-        </div>
-        
-        {/* Tasks Container */}
-        <div className="flex-1 p-3 space-y-3 overflow-y-auto max-h-[70vh] custom-scrollbar">
-            <AnimatePresence>
-                {tasks.map(task => {
-                    const isOverdue = task.status !== 'Completed' && task.dueDate && new Date(task.dueDate) < new Date();
-                    const showActions = (userRole === 'admin') || (task.createdBy === userId);
+// 🧱 MODERN TASK COLUMN
+const TaskColumn = ({ title, tasks, headerColor, onStatusChange, onEdit, onDelete, userRole, userId }) => {
+    // Permission check for actions
+    const canEdit = (task) => {
+        // Super Admin & Admin can edit anything
+        if (ROLE_LEVELS[userRole] >= 3) return true;
+        // Creator can edit their own tasks
+        if (task.createdBy === userId) return true;
+        return false;
+    };
 
-                    return (
-                        <motion.div 
-                            key={task.id}
-                            layout
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow group"
-                        >
-                            <div className="flex justify-between items-start mb-2">
-                                <PriorityBadge priority={task.priority} />
-                                {showActions && (
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => onEdit(task)} className="p-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-500 dark:text-blue-400 rounded"><Edit3 size={14} /></button>
-                                        <button onClick={() => onDelete(task.id)} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 dark:text-red-400 rounded"><Trash2 size={14} /></button>
-                                    </div>
-                                )}
-                            </div>
-                            
-                            <h5 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-1 leading-snug">{task.title}</h5>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 line-clamp-2">{task.description}</p>
-                            
-                            <div className="flex items-center justify-between pt-3 border-t border-gray-50 dark:border-gray-700">
-                                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-[10px] font-bold">
-                                        {task.assignedToName?.charAt(0).toUpperCase()}
-                                    </div>
-                                    {isOverdue && <span className="text-red-500 dark:text-red-400 flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded font-bold">Overdue</span>}
-                                </div>
-
-                                {/* Status Move Button */}
-                                <div className="flex items-center gap-1">
-                                    {task.status === 'Pending' && (
-                                        <button onClick={() => onStatusChange(task, 'In Progress')} className="text-[10px] font-bold bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 px-2 py-1 rounded flex items-center gap-1 transition-colors">
-                                            Start <ArrowRight size={10} />
-                                        </button>
-                                    )}
-                                    {task.status === 'In Progress' && (
-                                        <button onClick={() => onStatusChange(task, 'Completed')} className="text-[10px] font-bold bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40 text-green-600 dark:text-green-400 px-2 py-1 rounded flex items-center gap-1 transition-colors">
-                                            Done <CheckCircle size={10} />
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </motion.div>
-                    );
-                })}
-            </AnimatePresence>
+    return (
+        <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200/60 dark:border-gray-700 overflow-hidden">
+            <div className={`p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center ${headerColor}`}>
+                <h4 className="font-extrabold text-sm uppercase tracking-wide flex items-center gap-2">
+                    {title}
+                </h4>
+                <span className="bg-white/50 dark:bg-black/20 px-2 py-0.5 rounded text-xs font-bold">{tasks.length}</span>
+            </div>
             
-            {tasks.length === 0 && (
-                <div className="text-center py-10 opacity-40 select-none">
-                    <div className="bg-gray-100 dark:bg-gray-700 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2 text-xl">🥥</div>
-                    <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Empty</p>
-                </div>
-            )}
+            <div className="flex-1 p-3 space-y-3 overflow-y-auto max-h-[70vh] custom-scrollbar">
+                <AnimatePresence>
+                    {tasks.map(task => {
+                        const isOverdue = task.status !== 'Completed' && task.dueDate && new Date(task.dueDate) < new Date();
+                        const showActions = canEdit(task);
+
+                        return (
+                            <motion.div 
+                                key={task.id}
+                                layout
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow group"
+                            >
+                                <div className="flex justify-between items-start mb-2">
+                                    <PriorityBadge priority={task.priority} />
+                                    {showActions && (
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => onEdit(task)} className="p-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-500 dark:text-blue-400 rounded"><Edit3 size={14} /></button>
+                                            <button onClick={() => onDelete(task.id)} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 dark:text-red-400 rounded"><Trash2 size={14} /></button>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                <h5 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-1 leading-snug">{task.title}</h5>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 line-clamp-2">{task.description}</p>
+                                
+                                <div className="flex items-center justify-between pt-3 border-t border-gray-50 dark:border-gray-700">
+                                    <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-[10px] font-bold">
+                                            {task.assignedToName?.charAt(0).toUpperCase()}
+                                        </div>
+                                        {isOverdue && <span className="text-red-500 dark:text-red-400 flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded font-bold">Overdue</span>}
+                                    </div>
+
+                                    <div className="flex items-center gap-1">
+                                        {task.status === 'Pending' && (
+                                            <button onClick={() => onStatusChange(task, 'In Progress')} className="text-[10px] font-bold bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 px-2 py-1 rounded flex items-center gap-1 transition-colors">
+                                                Start <ArrowRight size={10} />
+                                            </button>
+                                        )}
+                                        {task.status === 'In Progress' && (
+                                            <button onClick={() => onStatusChange(task, 'Completed')} className="text-[10px] font-bold bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40 text-green-600 dark:text-green-400 px-2 py-1 rounded flex items-center gap-1 transition-colors">
+                                                Done <CheckCircle size={10} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </AnimatePresence>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 export default MyTasks;

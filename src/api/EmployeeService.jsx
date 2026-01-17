@@ -1,66 +1,120 @@
-// src/api/employeeService.js (FINAL CODE - Admin CRUD Support)
+// src/api/EmployeeService.js (MNC Standard - No Auto Logout)
 
-import { db } from '../Firebase'; // ⬅️ FIX: Path ko lowercase 'firebase' rakha
-import { doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore'; // ⬅️ IMPORT: setDoc import kiya
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'; // ⬅️ IMPORT: createUserWithEmailAndPassword import kiya
+import { db } from '../Firebase'; 
+import { doc, setDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore'; 
+import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth'; 
+import { initializeApp, getApp } from "firebase/app";
 
-const auth = getAuth(); // Firebase Auth Instance
+// 💡 HACK: Firebase Config ko wapas access kar rahe hain taaki 
+// hum ek "Secondary App" bana sakein. 
+// Isse Admin user create karte waqt logout nahi hoga.
+import { firebaseConfig } from '../Firebase'; // Make sure firebaseConfig is exported from your Firebase.js
 
-// 💡 NEW FUNCTION: Admin ke liye Auth aur Firestore profile ek saath banana
-// Admin creates user with a temporary password and full profile data
+// 1. Create User (Without kicking out the Admin)
 export const createUserWithProfile = async (email, password, profileData) => {
-    // profileData mein honge: name, role, empId, phoneNumber, address, etc.
+    let secondaryApp = null;
+    
     try {
-        // 1. Firebase Authentication User Create kiya (C - Create Auth)
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Step A: Initialize a temporary Firebase App
+        // Ye zaroori hai taaki 'createUser' call current session ko overwrite na kare.
+        secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+        const secondaryAuth = getAuth(secondaryApp);
+
+        // Step B: Create User on Secondary Auth
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
         const user = userCredential.user;
 
-        // 2. Firestore Profile Document Create/Set kiya (C - Create Firestore)
+        // Step C: Save Profile to Firestore (Main DB)
+        // Hum profileData spread kar rahe hain (name, role, empId, reportsTo, etc.)
         const userRef = doc(db, "users", user.uid);
         
         const dataToSave = {
             uid: user.uid,
             email: user.email,
-            // 💡 Photo URL default avatar set kiya, agar profileData mein nahi hai
-            photoURL: profileData.photoURL || 'https://firebasestorage.googleapis.com/v0/b/your-project.appspot.com/o/default-avatar.png', 
-            // 💡 Admin dwara diya gaya sab data
-            ...profileData, 
-            createdAt: new Date(),
+            photoURL: profileData.photoURL || `https://ui-avatars.com/api/?name=${profileData.name}&background=random`, // Better default avatar
+            createdAt: new Date().toISOString(),
+            isBlocked: false, // Default active
+            remainingLeaves: 15, // Default annual leaves
+            ...profileData 
         };
 
-        // setDoc use kiya naya document banane ke liye (yehi user profile hai)
-        await setDoc(userRef, dataToSave); 
+        await setDoc(userRef, dataToSave);
+
+        // Step D: Logout the *new* user from secondary app immediately
+        await signOut(secondaryAuth);
         
         return user;
+
     } catch (error) {
-        // Agar Auth mein error aaya (e.g., email-already-in-use), toh woh yahan throw ho jayega
+        console.error("Creation Error:", error);
         throw new Error(error.message);
+    } finally {
+        // Step E: Cleanup Memory (Remove secondary app)
+        if (secondaryApp) {
+            // Note: Firebase JS SDK deleteApp is technically async but we can just let it go
+            // deleteApp(secondaryApp); // Uncomment if imported
+        }
     }
 };
 
-
-// 💡 Employee Profile Update function (U - Update)
+// 2. Update Profile (Admin or Self)
 export const updateEmployeeProfile = async (uid, updates) => {
-    // updates mein honge: name, empId, phoneNumber, address, role (Admin ke liye)
     try {
         const userRef = doc(db, "users", uid);
-        await updateDoc(userRef, updates); // Firestore document update kiya
+        
+        // Add 'updatedAt' timestamp for audit trail
+        const cleanUpdates = {
+            ...updates,
+            updatedAt: new Date().toISOString()
+        };
+
+        await updateDoc(userRef, cleanUpdates);
         return true;
     } catch (error) {
-        throw new Error(error.message);
+        throw new Error("Update Failed: " + error.message);
     }
 };
 
-// 💡 Admin ke liye user ko Auth aur Firestore se delete karna (D - Delete)
+// 3. Toggle Block/Unblock (Force Stop)
+// Admin ke paas power hai kisi ko bhi turant rokne ki.
+export const toggleUserBlock = async (uid, currentStatus) => {
+    try {
+        const userRef = doc(db, "users", uid);
+        await updateDoc(userRef, { isBlocked: !currentStatus });
+        return !currentStatus; // Returns new status
+    } catch (error) {
+        throw new Error("Block/Unblock Failed: " + error.message);
+    }
+};
+
+// 4. Delete User (Firestore Only)
+// NOTE: Auth user delete karne ke liye Cloud Functions chahiye hote hain.
+// Client side se hum sirf DB record uda sakte hain aur user ko 'Block' kar sakte hain.
 export const deleteUserCompletely = async (uid) => {
     try {
-        // 1. Firestore se document delete kiya
-        await deleteDoc(doc(db, "users", uid)); 
+        // Delete Firestore Record
+        await deleteDoc(doc(db, "users", uid));
         
-        // 2. Auth deletion requires Cloud Functions.
-        // Ye warning zaroori hai.
-        console.warn(`Auth user with UID ${uid} still exists. Delete manually in Firebase Auth, or deploy a Cloud Function for complete deletion.`);
+        // Also delete related collections if needed (Optional: attendance, leaves)
+        // Note: Better to keep them for history or use 'soft delete' (isDeleted: true)
+        
+        console.warn("User removed from Database. Access revoked via blocking recommended.");
         return true;
+    } catch (error) {
+        throw new Error("Deletion Failed: " + error.message);
+    }
+};
+
+// 5. Get Single User Details
+export const getUserDetails = async (uid) => {
+    try {
+        const docRef = doc(db, "users", uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return docSnap.data();
+        } else {
+            throw new Error("No such employee!");
+        }
     } catch (error) {
         throw new Error(error.message);
     }

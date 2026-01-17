@@ -1,111 +1,135 @@
-// src/context/AuthContext.jsx (FINAL CODE: STABLE + SESSION FIX)
+// src/context/AuthContext.jsx
 
-import React, { useState, useEffect, createContext, useContext, useCallback } from 'react'; 
+import React, { useState, useEffect, createContext, useContext } from 'react'; 
 import { 
     onAuthStateChanged, 
-    signInWithEmailAndPassword, // ⬅️ Login ke liye
-    signOut, // ⬅️ Logout ke liye
-    setPersistence, // ⬅️ Session fix ke liye
-    browserSessionPersistence // ⬅️ Session fix ke liye
+    signInWithEmailAndPassword, 
+    signOut, 
+    setPersistence, 
+    browserSessionPersistence 
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore'; 
 import { auth, db } from '../Firebase'; 
 import LoadingSpinner from '../components/common/LoadingSpinner'; 
 
-export const AuthContext = createContext(undefined); 
+// 1. Context Creation
+const AuthContext = createContext(undefined);
 
+// 2. Custom Hook to use the AuthContext
 export const useAuth = () => {
-    const context = useContext(AuthContext); 
+    const context = useContext(AuthContext);
     if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider.');
+        throw new Error('useAuth must be used within an AuthProvider');
     }
     return context;
 };
 
+// 3. Auth Provider Component
 export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
     const [userProfile, setUserProfile] = useState(null); 
     const [loading, setLoading] = useState(true); 
 
-    // 💡 Fetch Profile function (Stable Version)
-    const fetchProfileData = useCallback(async (user) => {
-        if (!db || !user || !user.uid) {
-             setUserProfile(null);
-             setLoading(false);
-             return;
-        }
-
-        try {
-            const userDocRef = doc(db, "users", user.uid);
-            const docSnap = await getDoc(userDocRef); 
-            
-            if (docSnap.exists()) {
-                const profileData = { 
-                    ...docSnap.data(), 
-                    uid: user.uid,
-                    email: user.email 
-                };
-                if (!profileData.photoURL || profileData.photoURL === '') {
-                    profileData.photoURL = '/default-avatar.png';
-                }
-                setUserProfile(profileData);
-            } else {
-                setUserProfile({ uid: user.uid, email: user.email, role: 'guest', photoURL: '/default-avatar.png' });
-            }
-        } catch (error) {
-            console.error("Fatal Error fetching profile:", error);
-            setUserProfile({ uid: user.uid, email: user.email, error: true, role: 'guest' });
-        } finally {
-            setLoading(false); 
-        }
-    }, []); 
-
-    // 💡 LOGIN FUNCTION (Session Persistence ke saath)
+    // --- 1. Helper Functions ---
     const login = (email, password) => {
-        // Ye line magic karegi: Data Session Storage me jayega, Local Storage me nahi
         return setPersistence(auth, browserSessionPersistence)
-            .then(() => {
-                return signInWithEmailAndPassword(auth, email, password);
-            });
+            .then(() => signInWithEmailAndPassword(auth, email, password));
     };
 
-    // 💡 LOGOUT FUNCTION
-    const logout = () => {
-        return signOut(auth);
-    };
+    const logout = () => signOut(auth);
     
-    // 1. EFFECT 1 (Auth State)
+    // --- 2. Master Effect ---
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, user => {
-            setCurrentUser(user);
-            if (!user) {
+        let unsubscribeSnapshot = null;
+
+        const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                setCurrentUser(user);
+                
+                // Firestore Listener
+                if (db) {
+                    const userRef = doc(db, "users", user.uid);
+                    
+                    unsubscribeSnapshot = onSnapshot(userRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            const userData = docSnap.data();
+
+                            // 🚨 FORCE STOP LOGIC (UPDATED)
+                            if (userData.isBlocked) {
+                                console.warn("Access Revoked: User Blocked.");
+                                
+                                // Check if user is ALREADY on the force-stop page to prevent loop
+                                if (window.location.pathname !== '/force-stop') {
+                                    // Logout silently first
+                                    signOut(auth).then(() => {
+                                        // Hard Redirect using replace (History clear ho jayega)
+                                        window.location.replace('/force-stop');
+                                    });
+                                }
+                                // Stop further execution for this user
+                                setLoading(false); 
+                                return;
+                            }
+
+                            // Profile Data Setup
+                            const profileData = { 
+                                ...userData, 
+                                uid: user.uid, 
+                                email: user.email 
+                            };
+
+                            // Default Avatar
+                            if (!profileData.photoURL) {
+                                profileData.photoURL = `https://ui-avatars.com/api/?name=${userData.name || 'User'}&background=random`;
+                            }
+                            
+                            setUserProfile(profileData);
+                        } else {
+                            // Missing Profile Case
+                            setUserProfile({ 
+                                uid: user.uid, 
+                                email: user.email, 
+                                role: 'guest', 
+                                photoURL: 'https://ui-avatars.com/api/?name=Guest&background=random' 
+                            });
+                        }
+                        setLoading(false);
+                    }, (error) => {
+                        console.error("Profile Sync Error:", error);
+                        setLoading(false);
+                    });
+                }
+            } else {
+                // Logout State
+                setCurrentUser(null);
                 setUserProfile(null);
                 setLoading(false);
+                if (unsubscribeSnapshot) unsubscribeSnapshot();
             }
         });
-        return unsubscribe;
+
+        return () => {
+            unsubscribeAuth();
+            if (unsubscribeSnapshot) unsubscribeSnapshot();
+        };
     }, []); 
 
-    // 2. EFFECT 2 (Profile Data)
-    useEffect(() => {
-        if (currentUser) {
-            setLoading(true); 
-            fetchProfileData(currentUser); 
-        }
-    }, [currentUser, fetchProfileData]); 
-
-    // Value object me login function pass kiya
     const value = { 
         currentUser, 
         userProfile, 
+        currentRole: userProfile?.role || 'guest', 
         loading, 
-        login,  // ⬅️ Use this in LoginPage
-        logout, // ⬅️ Use this in Header/Sidebar
+        login, 
+        logout,
         auth 
     };
 
     if (loading) {
-        return <LoadingSpinner message="Authenticating..." size="50px" />;
+        return (
+            <div className="h-screen w-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                <LoadingSpinner message="Verifying Identity..." size="50px" />
+            </div>
+        );
     }
 
     return (

@@ -1,4 +1,4 @@
-// src/hooks/useFirestore.js (FINAL FIX - SHOWS ALL USERS)
+// src/hooks/useFirestore.js (FINAL STABLE VERSION)
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { db } from '../Firebase'; 
@@ -14,113 +14,144 @@ import {
     orderBy 
 } from 'firebase/firestore'; 
 
-// 👇 CHANGE: Default value 'null' se hata kar '[]' (Empty Array) kar di
-export const useFirestore = (collectionName, queryFilters = [], orderByOptions = null) => {
-    const [data, setData] = useState(null);
+/**
+ * Custom Hook for real-time Firestore data.
+ * @param {string} collectionName - Collection to fetch (e.g., 'users')
+ * @param {Array} queryFilters - Array of filters [['role', '==', 'employee']] OR null/[] for ALL data.
+ * @param {Object} orderByOptions - { field: 'createdAt', direction: 'desc' }
+ */
+export const useFirestore = (collectionName, queryFilters = null, orderByOptions = null) => {
+    const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Dependencies memoize kiye
+    // 💡 Memoize dependencies to prevent infinite re-renders
     const filterKey = useMemo(() => JSON.stringify(queryFilters), [queryFilters]);
     const orderKey = useMemo(() => JSON.stringify(orderByOptions), [orderByOptions]);
 
     useEffect(() => {
-        setLoading(true);
-        setError(null);
-        
-        // 🛑 Check: Agar Collection nahi hai YA Filter explicitly NULL hai -> Ruk jao
-        // Note: Ab default [] hai, toh ye check fail hoga aur query chalegi (Jo hum chahte hain)
-        if (!collectionName || queryFilters === null) {
+        // 1. Basic Safety Check
+        if (!collectionName) {
             setLoading(false);
-            setData([]); 
-            return; 
+            return;
         }
 
-        // 🛑 Check: Invalid filter structure safety
-        if (Array.isArray(queryFilters)) {
+        setLoading(true);
+        setError(null);
+
+        // 2. 🛡️ QUERY SAFETY CHECK
+        // Agar filters hain, toh check karo ki value 'undefined' toh nahi hai?
+        // (Firestore crashes if value is undefined)
+        if (Array.isArray(queryFilters) && queryFilters.length > 0) {
             const hasInvalidFilter = queryFilters.some(f => 
-                f && f.length === 3 && (f[2] === undefined || f[2] === null || f[2] === '')
+                Array.isArray(f) && f.length === 3 && (f[2] === undefined)
             );
 
             if (hasInvalidFilter) {
-                setLoading(false);
+                console.warn(`[useFirestore] Skipped query due to undefined filter values in ${collectionName}`);
+                // Don't set error, just wait. Data might be coming from async source.
+                // setLoading(false); 
                 return; 
             }
         }
-        
+
         try {
-            let queryArgs = [];
-            
-            // Filters Add karo (Agar hain toh)
-            if (Array.isArray(queryFilters)) {
+            // 3. Construct Query
+            const collectionRef = collection(db, collectionName);
+            let finalQuery = collectionRef;
+            let queryConstraints = [];
+
+            // A. Apply Filters (If any)
+            if (Array.isArray(queryFilters) && queryFilters.length > 0) {
                 queryFilters.forEach(filter => {
                     if (Array.isArray(filter) && filter.length === 3) {
-                        queryArgs.push(where(filter[0], filter[1], filter[2]));
+                        // Ensure value is not null/undefined before applying
+                        if(filter[2] !== undefined && filter[2] !== '') {
+                            queryConstraints.push(where(filter[0], filter[1], filter[2]));
+                        }
                     }
                 });
             }
-            
-            // Sorting Add karo
+
+            // B. Apply Sorting
             if (orderByOptions && orderByOptions.field) {
                 const direction = orderByOptions.direction === 'desc' ? 'desc' : 'asc';
-                queryArgs.push(orderBy(orderByOptions.field, direction));
+                queryConstraints.push(orderBy(orderByOptions.field, direction));
             }
 
-            // Firestore Listener
-            const ref = collection(db, collectionName);
-            const q = queryArgs.length > 0 ? firestoreQuery(ref, ...queryArgs) : ref;
+            // C. Build Final Query
+            if (queryConstraints.length > 0) {
+                finalQuery = firestoreQuery(collectionRef, ...queryConstraints);
+            }
 
-            const unsubscribe = onSnapshot(q, (snapshot) => {
-                const results = snapshot.docs.map(doc => ({ 
-                    id: doc.id, 
-                    ...doc.data() 
-                }));
-                setData(results);
-                setLoading(false);
-            }, (err) => {
-                console.error("Firestore Error:", err);
-                setError(err.message);
-                setLoading(false);
-            });
+            // 4. 🔥 Real-time Listener (Snapshot)
+            const unsubscribe = onSnapshot(finalQuery, 
+                (snapshot) => {
+                    const results = snapshot.docs.map(doc => ({ 
+                        id: doc.id, 
+                        ...doc.data() 
+                    }));
+                    setData(results);
+                    setLoading(false);
+                }, 
+                (err) => {
+                    console.error(`[useFirestore] Error in ${collectionName}:`, err);
+                    setError(err.message);
+                    setLoading(false);
+                }
+            );
 
+            // Cleanup listener on unmount or dependency change
             return () => unsubscribe();
 
         } catch (err) {
-            console.error("Hook Setup Error:", err);
+            console.error("[useFirestore] Setup Error:", err);
             setError(err.message);
             setLoading(false);
         }
         
     }, [collectionName, filterKey, orderKey]); 
 
-    // --- CRUD Operations ---
+    // --- CRUD Operations (Stable references via useCallback) ---
 
     const deleteDocument = useCallback(async (id) => {
+        if (!id) return;
         try {
             await deleteDoc(doc(db, collectionName, id));
             return true;
         } catch (err) {
-            console.error(err);
+            console.error("Delete Error:", err);
             throw err;
         }
     }, [collectionName]);
 
-    const addDocument = useCallback(async (document) => {
+    const addDocument = useCallback(async (documentData) => {
         try {
-            const docRef = await addDoc(collection(db, collectionName), document);
+            // Add 'createdAt' if missing
+            const payload = {
+                ...documentData,
+                createdAt: documentData.createdAt || new Date().toISOString()
+            };
+            const docRef = await addDoc(collection(db, collectionName), payload);
             return docRef.id;
         } catch (err) {
-            console.error(err);
+            console.error("Add Error:", err);
             throw err;
         }
     }, [collectionName]);
 
     const updateDocument = useCallback(async (id, updates) => {
+        if (!id) return;
         try {
-            await updateDoc(doc(db, collectionName, id), updates);
+            // Add 'updatedAt'
+            const payload = {
+                ...updates,
+                updatedAt: new Date().toISOString()
+            };
+            await updateDoc(doc(db, collectionName, id), payload);
             return true;
         } catch (err) {
-            console.error(err);
+            console.error("Update Error:", err);
             throw err;
         }
     }, [collectionName]);

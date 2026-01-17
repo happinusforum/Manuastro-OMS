@@ -1,8 +1,7 @@
-// src/hooks/UseAuth.jsx (ULTIMATE STABILITY FIX - Loading Synchronization)
+// src/hooks/UseAuth.jsx (OPTIMIZED & STABLE)
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
-// ⬅️ FIX 1: Path ko capital 'Firebase' rakha (as per your system)
-import { auth, db } from '../Firebase'; 
+import { auth, db } from '../Firebase'; // ✅ Path correct rakha hai
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore'; 
 import LoadingSpinner from '../components/common/LoadingSpinner'; 
@@ -10,7 +9,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 // 1. Context Creation
 const AuthContext = createContext(undefined); 
 
-// 2. Custom Hook (Remains the same)
+// 2. Custom Hook
 export const useAuth = () => {
     const context = useContext(AuthContext); 
     if (context === undefined) {
@@ -25,70 +24,58 @@ export const AuthProvider = ({ children }) => {
     const [userProfile, setUserProfile] = useState(null); 
     const [loading, setLoading] = useState(true); 
 
-    // ⬅️ LOGIC BLOCK 1: Firebase Auth State Listener (Only updates user)
+    // --- EFFECT 1: Listen to Auth Changes ---
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, user => {
-            setCurrentUser(user);
-            // Loading ko true yahan nahi karte, kyunki woh Effect 2 handle karega
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // User logged in via Auth
+                setCurrentUser(user);
+                
+                // Fetch Profile from Firestore immediately
+                try {
+                    if (db) {
+                        const docRef = doc(db, "users", user.uid);
+                        const docSnap = await getDoc(docRef);
+                        
+                        if (docSnap.exists()) {
+                            const profileData = { 
+                                ...docSnap.data(), 
+                                uid: user.uid,
+                                email: user.email 
+                            };
+
+                            // Default photo logic
+                            if (!profileData.photoURL) {
+                                profileData.photoURL = '/default-avatar.png';
+                            }
+                            setUserProfile(profileData);
+                        } else {
+                            // User exists in Auth but no Profile in DB (Rare)
+                            setUserProfile({ 
+                                uid: user.uid, 
+                                email: user.email, 
+                                photoURL: '/default-avatar.png', 
+                                role: 'guest' 
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error("Profile Fetch Error:", error);
+                    setUserProfile(null);
+                }
+            } else {
+                // User logged out
+                setCurrentUser(null);
+                setUserProfile(null);
+            }
+            
+            // Stop loading after everything is done
+            setLoading(false);
         });
-        return unsubscribe;
+
+        return () => unsubscribe();
     }, []);
 
-    // ⬅️ LOGIC BLOCK 2: Firestore User Profile Fetcher (Stabilized Logic)
-    useEffect(() => {
-        
-        // ⬅️ FIX 2: Check for existing user to start profile fetching
-        if (!currentUser) {
-             setUserProfile(null);
-             setLoading(false); // Logged out state mein loading off
-             return;
-        }
-
-        // --- Profile Fetch Start ---
-        setLoading(true); // ⬅️ FIX 3: Loading ko yahan synchronously true kiya
-        
-        const fetchProfile = async () => {
-            
-            // Check db stability, though Firebase should handle this internally
-            if (!db || !currentUser.uid) {
-                 setUserProfile(null);
-                 setLoading(false);
-                 return;
-            }
-
-            try {
-                const docRef = doc(db, "users", currentUser.uid);
-                const docSnap = await getDoc(docRef); // ⬅️ CRASH POINT
-
-                if (docSnap.exists()) {
-                    const profileData = { 
-                        ...docSnap.data(), 
-                        uid: currentUser.uid,
-                        email: currentUser.email 
-                    };
-                    // Photo URL safety check:
-                    if (!profileData.photoURL || profileData.photoURL === '') {
-                        profileData.photoURL = '/default-avatar.png';
-                    }
-                    setUserProfile(profileData);
-                } else {
-                    setUserProfile({ uid: currentUser.uid, email: currentUser.email, photoURL: '/default-avatar.png', role: 'guest' });
-                }
-            } catch (error) {
-                console.error("Fatal Error fetching profile:", error);
-                setUserProfile({ uid: currentUser.uid, email: currentUser.email, error: true, role: 'guest' });
-            } finally {
-                // Loading ko finally mein hi false karte hain
-                setLoading(false); 
-            }
-        };
-        
-        // Function call kiya
-        fetchProfile();
-
-    }, [currentUser]); // Only runs when currentUser changes
-
-    // 💡 VALUE: Ab context mein currentUser aur userProfile dono hain
     const value = {
         currentUser,
         userProfile, 
@@ -97,7 +84,13 @@ export const AuthProvider = ({ children }) => {
 
     return (
         <AuthContext.Provider value={value}>
-            {loading ? <LoadingSpinner message="Securing connection and fetching profile..." size="40px" /> : children}
+            {loading ? (
+                <div className="h-screen w-full flex items-center justify-center bg-gray-50">
+                    <LoadingSpinner message="Authenticating..." size="50px" />
+                </div>
+            ) : (
+                children
+            )}
         </AuthContext.Provider>
     );
 };

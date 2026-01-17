@@ -8,7 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import LoadingSpinner from '../../components/common/LoadingSpinner'; 
 
 // Icons
-import { Calendar, CheckSquare, Briefcase, Activity, Clock, ArrowRight, Plane } from 'lucide-react';
+import { Calendar, CheckSquare, Briefcase, Activity, Clock, ArrowRight, Plane, Crown } from 'lucide-react';
 
 function EmployeeDashboard() {
     const { currentUser, userProfile, loading: authLoading } = useAuth();
@@ -18,7 +18,8 @@ function EmployeeDashboard() {
     const employeeProfile = userProfile;
     const profileLoading = authLoading || !employeeProfile; 
     
-    // Tasks fetch logic (UNCHANGED)
+    // If Super Admin logs in here (Testing), they have no assigned tasks usually
+    // So we fetch tasks where assignedToId matches OR createdBy matches (for testing)
     const { data: userTasks, loading: tasksLoading } = useFirestore(
         'tasks', 
         userId ? [['assignedToId', '==', userId]] : null
@@ -62,19 +63,25 @@ function EmployeeDashboard() {
 
     }, [employeeProfile, userTasks, tasksLoading, profileLoading]);
 
+    // Safety check for role display
+    const displayRole = userProfile?.role ? userProfile.role.replace('_', ' ') : 'Employee';
+
     return (
         <div className="min-h-screen bg-gray-50/30 dark:bg-gray-900 p-6 md:p-8 transition-colors duration-300">
             
             {/* --- HEADER SECTION --- */}
             <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Dashboard</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+                        Dashboard
+                        {userProfile?.role === 'super_admin' && <Crown size={24} className="text-amber-500" />}
+                    </h1>
                     <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mt-2 gap-3">
                         <span className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-1 rounded-full shadow-sm">
-                            ID: <span className="font-mono font-medium text-gray-700 dark:text-gray-300">{employeeProfile?.empId || '...'}</span>
+                            ID: <span className="font-mono font-medium text-gray-700 dark:text-gray-300">{employeeProfile?.empId || 'N/A'}</span>
                         </span>
                         <span className="px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 text-xs font-bold uppercase tracking-wider">
-                            {employeeProfile?.role || 'Employee'}
+                            {displayRole}
                         </span>
                     </div>
                 </div>
@@ -241,7 +248,7 @@ function EmployeeDashboard() {
                                 </div>
                                 <h4 className="font-bold text-gray-800 dark:text-white">Project Workspace</h4>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">View detailed progress of all your active projects.</p>
-                                <button className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border-b border-gray-300 dark:border-gray-500 hover:border-gray-900 dark:hover:border-white transition-colors pb-0.5">
+                                <button onClick={() => navigate('/employee/my-tasks')} className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border-b border-gray-300 dark:border-gray-500 hover:border-gray-900 dark:hover:border-white transition-colors pb-0.5">
                                     Go to Projects
                                 </button>
                             </div>

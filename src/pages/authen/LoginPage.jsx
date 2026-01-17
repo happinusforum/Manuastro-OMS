@@ -9,7 +9,7 @@ import { db, auth } from '../../Firebase';
 
 // 🎨 Premium Assets
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, ArrowRight, CheckCircle, AlertTriangle, Shield, Users, User } from 'lucide-react';
+import { Mail, Lock, ArrowRight, CheckCircle, AlertTriangle, Shield, Users, User, Crown } from 'lucide-react';
 
 function LoginPage() {
     const [email, setEmail] = useState('');
@@ -42,38 +42,53 @@ function LoginPage() {
             }
 
             const userData = userDoc.data();
-            const actualRole = userData.role;
+            const actualRole = userData.role; // e.g., 'super_admin', 'admin', 'hr'
 
-            // 🛑 3. CHECK MAINTENANCE MODE STATUS
-            const settingsRef = doc(db, 'settings', 'global');
-            const settingsSnap = await getDoc(settingsRef);
-            
-            if (settingsSnap.exists()) {
-                const isMaintenance = settingsSnap.data().maintenanceMode;
+            // 🛑 3. FORCE STOP CHECK (Redundant but safe)
+            if (userData.isBlocked) {
+                await logout();
+                throw new Error("Access Revoked: Your account has been suspended.");
+            }
+
+            // 🛑 4. MAINTENANCE MODE CHECK
+            // Super Admin can ALWAYS bypass maintenance
+            if (actualRole !== 'super_admin') {
+                const settingsRef = doc(db, 'settings', 'global');
+                const settingsSnap = await getDoc(settingsRef);
                 
-                // Logic: If Maintenance ON and User is NOT Admin -> Logout & Redirect
-                if (isMaintenance && actualRole !== 'admin') {
-                    await logout(); 
-                    setLoading(false);
-                    navigate('/maintenance'); 
-                    return; 
+                if (settingsSnap.exists() && settingsSnap.data().maintenanceMode) {
+                    // Admins can also bypass, but others get kicked
+                    if (actualRole !== 'admin') {
+                        await logout(); 
+                        setLoading(false);
+                        navigate('/maintenance'); 
+                        return; 
+                    }
                 }
             }
 
-            // 4. Verify Role Match
-            if (actualRole !== intendedRole) {
+            // 5. Verify Role Match (Smart Logic)
+            // If user clicks "Super Admin" but is actually just "Admin" -> Block
+            // If user clicks "Admin" but is "Super Admin" -> Allow (Higher power)
+            
+            let allowed = false;
+            if (actualRole === intendedRole) allowed = true;
+            if (actualRole === 'super_admin') allowed = true; // Super Admin can login via any button essentially
+            
+            if (!allowed) {
                 await logout();
-                setError(`Access Denied! You are '${actualRole.toUpperCase()}', cannot login as '${intendedRole.toUpperCase()}'.`);
-                setLoading(false);
-                return;
+                throw new Error(`Access Denied! You hold a '${actualRole.toUpperCase()}' position, please use the correct login.`);
             }
 
-            // 5. Success - Navigate to Dashboard
+            // 6. Success - Navigate to Dashboard
             setLoading(false);
             let path = '/';
-            if (actualRole === 'admin') path = '/admin/dashboard';
+            
+            // 🔥 Super Admin shares the Admin Dashboard (with extra features unlocked)
+            if (actualRole === 'super_admin' || actualRole === 'admin') path = '/admin/dashboard';
             else if (actualRole === 'hr') path = '/hr/dashboard';
             else if (actualRole === 'employee') path = '/employee/dashboard';
+            
             navigate(path);
 
         } catch (err) {
@@ -81,7 +96,7 @@ function LoginPage() {
             let msg = "Failed to login.";
             if (err.code === 'auth/invalid-credential') msg = "Invalid Email or Password.";
             if (err.code === 'auth/too-many-requests') msg = "Too many attempts. Try later.";
-            if (err.message.includes("Access Denied")) msg = err.message;
+            if (err.message) msg = err.message;
             setError(msg);
             setLoading(false);
         }
@@ -107,7 +122,7 @@ function LoginPage() {
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-gray-900 p-4 relative overflow-hidden transition-colors duration-300">
             
-            {/* Background Blobs Animation */}
+            {/* Background Blobs */}
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-300 dark:bg-purple-900/40 rounded-full blur-[120px] opacity-30 animate-pulse"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-300 dark:bg-blue-900/40 rounded-full blur-[120px] opacity-30 animate-pulse delay-700"></div>
 
@@ -217,34 +232,41 @@ function LoginPage() {
                         {!isResetMode ? (
                             <div className="mt-6">
                                 <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase mb-3 text-center tracking-wider">Select Role to Login</p>
-                                <div className="grid grid-cols-1 gap-3">
-                                    
-                                    {/* Admin Button */}
-                                    <button onClick={(e) => handleLogin(e, 'admin')} disabled={loading}
-                                        className="group relative flex items-center justify-between p-3 rounded-xl border border-purple-100 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-600 dark:hover:bg-purple-700 transition-all duration-300">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-white dark:bg-gray-800 rounded-lg text-purple-600 dark:text-purple-400 shadow-sm"><Shield size={18} /></div>
-                                            <span className="font-bold text-purple-900 dark:text-purple-300 group-hover:text-white">Admin Access</span>
-                                        </div>
-                                        <ArrowRight size={18} className="text-purple-400 group-hover:text-white transform group-hover:translate-x-1 transition-transform" />
+                                
+                                {/* 👑 Super Admin / Admin Button (Combined Visual) */}
+                                <button onClick={(e) => handleLogin(e, 'super_admin')} disabled={loading}
+                                    className="group w-full mb-3 relative flex items-center justify-between p-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-500 dark:hover:bg-amber-600 transition-all duration-300">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-white dark:bg-gray-800 rounded-lg text-amber-600 dark:text-amber-400 shadow-sm"><Crown size={18} /></div>
+                                        <span className="font-bold text-amber-900 dark:text-amber-300 group-hover:text-white">Super Admin / Owner</span>
+                                    </div>
+                                    <ArrowRight size={18} className="text-amber-400 group-hover:text-white transform group-hover:translate-x-1 transition-transform" />
+                                </button>
+
+                                {/* Admin (Manager) Button */}
+                                <button onClick={(e) => handleLogin(e, 'admin')} disabled={loading}
+                                    className="group w-full mb-3 relative flex items-center justify-between p-3 rounded-xl border border-purple-100 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-600 dark:hover:bg-purple-700 transition-all duration-300">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-white dark:bg-gray-800 rounded-lg text-purple-600 dark:text-purple-400 shadow-sm"><Shield size={18} /></div>
+                                        <span className="font-bold text-purple-900 dark:text-purple-300 group-hover:text-white">Admin (Operations)</span>
+                                    </div>
+                                    <ArrowRight size={18} className="text-purple-400 group-hover:text-white transform group-hover:translate-x-1 transition-transform" />
+                                </button>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    {/* HR Button */}
+                                    <button onClick={(e) => handleLogin(e, 'hr')} disabled={loading}
+                                        className="group flex items-center justify-center gap-2 p-3 rounded-xl border border-teal-100 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-500 dark:hover:bg-teal-700 hover:border-teal-500 dark:hover:border-teal-700 transition-all duration-300">
+                                        <Users size={16} className="text-teal-600 dark:text-teal-400 group-hover:text-white" />
+                                        <span className="font-bold text-sm text-teal-900 dark:text-teal-300 group-hover:text-white">HR Login</span>
                                     </button>
 
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {/* HR Button */}
-                                        <button onClick={(e) => handleLogin(e, 'hr')} disabled={loading}
-                                            className="group flex items-center justify-center gap-2 p-3 rounded-xl border border-teal-100 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-500 dark:hover:bg-teal-700 hover:border-teal-500 dark:hover:border-teal-700 transition-all duration-300">
-                                            <Users size={16} className="text-teal-600 dark:text-teal-400 group-hover:text-white" />
-                                            <span className="font-bold text-sm text-teal-900 dark:text-teal-300 group-hover:text-white">HR Login</span>
-                                        </button>
-
-                                        {/* Employee Button */}
-                                        <button onClick={(e) => handleLogin(e, 'employee')} disabled={loading}
-                                            className="group flex items-center justify-center gap-2 p-3 rounded-xl border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-600 dark:hover:bg-blue-700 hover:border-blue-600 dark:hover:border-blue-700 transition-all duration-300">
-                                            <User size={16} className="text-blue-600 dark:text-blue-400 group-hover:text-white" />
-                                            <span className="font-bold text-sm text-blue-900 dark:text-blue-300 group-hover:text-white">Employee Login</span>
-                                        </button>
-                                    </div>
-
+                                    {/* Employee Button */}
+                                    <button onClick={(e) => handleLogin(e, 'employee')} disabled={loading}
+                                        className="group flex items-center justify-center gap-2 p-3 rounded-xl border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-600 dark:hover:bg-blue-700 hover:border-blue-600 dark:hover:border-blue-700 transition-all duration-300">
+                                        <User size={16} className="text-blue-600 dark:text-blue-400 group-hover:text-white" />
+                                        <span className="font-bold text-sm text-blue-900 dark:text-blue-300 group-hover:text-white">Employee</span>
+                                    </button>
                                 </div>
                             </div>
                         ) : (

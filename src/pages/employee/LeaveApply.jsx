@@ -2,10 +2,11 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useFirestore } from '../../hooks/useFirestore';
+import { useFirestore } from '../../hooks/useFirestore'; // Hook
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore'; 
 import { db } from '../../Firebase'; 
 
+// [ ... Imports Same as Before ... ]
 // 🎨 UI & Animation Libraries
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -22,24 +23,18 @@ const initialFormState = {
     type: 'leave' // default
 };
 
-// ✨ Animation Variants
-const containerVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
-};
-
-const formSectionVariants = {
-    hidden: { opacity: 0, x: -20 },
-    visible: { opacity: 1, x: 0, transition: { duration: 0.3 } },
-    exit: { opacity: 0, x: 20, transition: { duration: 0.2 } }
-};
+// ... [Variants Same as Before] ...
+const containerVariants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
+const formSectionVariants = { hidden: { opacity: 0, x: -20 }, visible: { opacity: 1, x: 0, transition: { duration: 0.3 } }, exit: { opacity: 0, x: 20, transition: { duration: 0.2 } } };
 
 function LeaveApply() {
     const [formData, setFormData] = useState(initialFormState);
     const [message, setMessage] = useState({ type: '', text: '' });
     const [loading, setLoading] = useState(false);
     
-    const { addDocument } = useFirestore('leaves'); 
+    // 🔥 FIX: Pass null as filter to prevent fetching all leaves (which causes Permission Error)
+    // We only need 'addDocument' function from the hook
+    const { addDocument } = useFirestore(null); 
     const { currentUser, userProfile } = useAuth(); 
 
     const userId = currentUser?.uid;
@@ -49,13 +44,11 @@ function LeaveApply() {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    // 🏷️ Type Selector Handler
-    const handleTypeSelect = (selectedType) => {
-        setFormData({ ...formData, type: selectedType });
-        setMessage({ type: '', text: '' });
-    };
+    // [ ... Rest of the component logic remains EXACTLY SAME ... ]
+    // Just replace the hook line above and keep everything else.
 
-    // 🚀 SUBMIT LOGIC
+    const handleTypeSelect = (selectedType) => { setFormData({ ...formData, type: selectedType }); setMessage({ type: '', text: '' }); };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setMessage({ type: '', text: '' });
@@ -82,7 +75,9 @@ function LeaveApply() {
         }
 
         const newRequest = {
-            userId, name: userName, empId: userProfile?.empId || 'N/A', 
+            userId, 
+            name: userName, 
+            empId: userProfile?.empId || 'N/A', 
             type: formData.type, 
             ...(formData.type === 'leave' && { leaveType: formData.leaveType }),
             ...(formData.type === 'travel' && { travelType: formData.travelType }),
@@ -90,36 +85,54 @@ function LeaveApply() {
             endDate: formData.endDate,
             days: days || 0,
             reason: formData.reason,
-            appliedAt: new Date(), 
-            status: 'Pending HR', 
-            hrActionBy: null, adminActionBy: null
+            appliedAt: new Date().toISOString(), 
+            status: 'Pending', 
+            hrActionBy: null, 
+            adminActionBy: null,
+            reportsTo: userProfile?.reportsTo || null,
+            department: userProfile?.department || 'IT'
         };
 
         try {
-            const docRef = await addDocument(newRequest); 
+            // NOTE: Manually using 'leaves' collection here via the hook helper
+            // But since we passed null to useFirestore, it might not know the collection.
+            // BETTER FIX: Use direct firebase addDoc or fix hook usage.
+            // Let's revert to using useFirestore('leaves') but with a dummy filter to avoid fetching ALL.
+            
+            // Actually, let's just use direct Firebase for safety here since we just want to ADD.
+            const docRef = await addDoc(collection(db, 'leaves'), newRequest); 
 
-            const q = query(collection(db, "users"), where("role", "==", "hr"));
-            const querySnapshot = await getDocs(q);
+            // Notification Logic
+            let recipients = [];
+            if (userProfile?.reportsTo) {
+                recipients.push(userProfile.reportsTo);
+            } else {
+                const q = query(collection(db, "users"), where("role", "in", ["hr", "admin", "super_admin"]));
+                const querySnapshot = await getDocs(q);
+                recipients = querySnapshot.docs.map(doc => doc.id);
+            }
+            recipients = [...new Set(recipients)].filter(id => id !== userId);
 
-            const notifPromises = querySnapshot.docs.map(doc => {
+            const notifPromises = recipients.map(recipientId => {
                 return addDoc(collection(db, "notifications"), {
-                    recipientId: doc.id, 
+                    recipientId: recipientId, 
                     message: `New ${formData.type} request from ${userName}`,
                     type: `${formData.type}_request`,
                     link: '/hr/leave-requests',
                     status: 'unread',
-                    createdAt: new Date(),
-                    relatedId: docRef?.id || null 
+                    createdAt: new Date().toISOString(),
+                    relatedId: docRef.id 
                 });
             });
 
             if (notifPromises.length > 0) await Promise.all(notifPromises);
 
-            setMessage({ type: 'success', text: "Request Sent! HR has been notified." });
+            setMessage({ type: 'success', text: "Request Sent Successfully!" });
             setFormData(initialFormState); 
 
         } catch (error) {
-            setMessage({ type: 'error', text: error.message });
+            console.error("Leave Apply Error:", error);
+            setMessage({ type: 'error', text: "Failed to submit request. Try again." });
         } finally {
             setLoading(false);
         }
@@ -184,7 +197,7 @@ function LeaveApply() {
                         </div>
                         
                         <div className="mt-8 text-xs text-indigo-200 opacity-60 relative z-10">
-                            *Approvals usually take 24-48 hours.
+                            *Approvals are routed to your Reporting Manager.
                         </div>
                     </div>
 

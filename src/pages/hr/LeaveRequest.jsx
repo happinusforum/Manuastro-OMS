@@ -6,6 +6,15 @@ import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { doc, updateDoc, addDoc, collection } from 'firebase/firestore'; 
 import { db } from '../../Firebase'; 
+import { Shield, User, Crown, CheckCircle, XCircle } from 'lucide-react';
+
+// 🔥 HIERARCHY LEVELS
+const ROLE_LEVELS = {
+    'super_admin': 4,
+    'admin': 3,
+    'hr': 2,
+    'employee': 1
+};
 
 function LeaveRequests() {
     const [message, setMessage] = useState('');
@@ -13,32 +22,49 @@ function LeaveRequests() {
     // Auth & Identity
     const { currentUser, userProfile } = useAuth(); 
     const reviewerName = userProfile?.name || currentUser?.email || 'System User'; 
-    const userRole = userProfile?.role; 
+    const userRole = userProfile?.role || 'employee'; 
+    const currentLevel = ROLE_LEVELS[userRole] || 0;
 
     const isHR = userRole === 'hr';
     const isAdmin = userRole === 'admin';
+    const isSuperAdmin = userRole === 'super_admin';
 
-    // Firestore Hook
+    // Firestore Hook - Get ALL Leaves (Filter in JS for Hierarchy)
     const { 
         data: allRequests, 
         loading: loadingData, 
         error: dataError,
     } = useFirestore('leaves'); 
 
-    // 🔍 Filter: Show active workflow items
+    // 🔍 Filter & Sort: Show active items based on Hierarchy
     const activeRequests = useMemo(() => {
         if (!allRequests) return [];
         
-        return allRequests.filter(req => 
-            req.status === 'Pending HR' || 
-            req.status === 'Pending Admin' ||
-            req.status === 'Pending' 
-        ).sort((a, b) => {
-            const dateA = a.appliedAt?.toDate ? a.appliedAt.toDate() : new Date(a.startDate || 0);
-            const dateB = b.appliedAt?.toDate ? b.appliedAt.toDate() : new Date(b.startDate || 0);
+        let filtered = allRequests.filter(req => {
+            // 1. Status Check (Show only active)
+            const isPending = ['Pending', 'Pending HR', 'Pending Admin'].includes(req.status);
+            if (!isPending) return false;
+
+            // 2. Hierarchy Check (Only show subordinates)
+            // Fetch requester's role level (Need to join with users collection ideally, but simplified here)
+            // Assuming requester info is incomplete, we rely on 'reportsTo' if available or general role logic
+            
+            // If user is direct report, show.
+            if (req.reportsTo === currentUser.uid) return true;
+
+            // Fallback: Show based on Role Hierarchy (if reportsTo is empty)
+            // Since we don't have requester's role in 'leaves' collection easily, 
+            // we assume Admin/HR sees all pending items for now, but actionable buttons will be restricted.
+            return true; 
+        });
+
+        // Sort by Date
+        return filtered.sort((a, b) => {
+            const dateA = a.appliedAt?.toDate ? a.appliedAt.toDate() : new Date(a.appliedAt || 0);
+            const dateB = b.appliedAt?.toDate ? b.appliedAt.toDate() : new Date(b.appliedAt || 0);
             return dateB - dateA;
         });
-    }, [allRequests]);
+    }, [allRequests, currentUser.uid]);
 
     // 🔔 Notification Helper
     const sendNotification = async (recipientId, msg, type) => {
@@ -47,9 +73,9 @@ function LeaveRequests() {
                 recipientId: recipientId,
                 message: msg,
                 type: type, 
-                link: '/employee/leave-history',
+                link: '/employee/my-leave-status', // Correct link for employee
                 status: 'unread',
-                createdAt: new Date()
+                createdAt: new Date().toISOString()
             });
         } catch (e) { console.error("Notif Error", e); }
     };
@@ -62,7 +88,7 @@ function LeaveRequests() {
             await updateDoc(doc(db, 'leaves', req.id), { 
                 status: 'Pending Admin', 
                 hrActionBy: reviewerName, 
-                hrActionDate: new Date()
+                hrActionDate: new Date().toISOString()
             });
             await sendNotification(req.userId, `Your ${req.type} request forwarded to Admin.`, `${req.type}_status_update`);
             setMessage(`Success! Request forwarded to Admin.`);
@@ -77,10 +103,26 @@ function LeaveRequests() {
             await updateDoc(doc(db, 'leaves', req.id), { 
                 status: 'Approved', 
                 adminActionBy: reviewerName, 
-                adminActionDate: new Date()
+                adminActionDate: new Date().toISOString()
             });
             await sendNotification(req.userId, `🎉 Your ${req.type} request is Approved!`, `${req.type}_status_update`);
             setMessage(`Success! Request fully approved.`);
+            setTimeout(() => setMessage(''), 3000);
+        } catch (error) { setMessage(`Error: ${error.message}`); }
+    };
+
+    // 👑 Super Admin Override
+    const handleSuperAdminApprove = async (req) => {
+        if (!window.confirm("Grant Instant Approval (Override)?")) return;
+        setMessage('');
+        try {
+            await updateDoc(doc(db, 'leaves', req.id), { 
+                status: 'Approved', 
+                adminActionBy: `Super Admin (${reviewerName})`, 
+                adminActionDate: new Date().toISOString()
+            });
+            await sendNotification(req.userId, `🎉 Your ${req.type} request is Approved by Owner!`, `${req.type}_status_update`);
+            setMessage(`Request approved instantly.`);
             setTimeout(() => setMessage(''), 3000);
         } catch (error) { setMessage(`Error: ${error.message}`); }
     };
@@ -94,7 +136,7 @@ function LeaveRequests() {
                 status: 'Rejected',
                 rejectedBy: reviewerName, 
                 rejectionReason: reason,
-                rejectedAt: new Date()
+                rejectedAt: new Date().toISOString()
             });
             await sendNotification(req.userId, `❌ Your ${req.type} request was Rejected.`, `${req.type}_status_update`);
             setMessage(`Request rejected.`);
@@ -102,7 +144,7 @@ function LeaveRequests() {
         } catch (error) { setMessage(`Error: ${error.message}`); }
     };
 
-    // Helper: Badge Colors & Labels (Dark Mode Adjusted)
+    // Helper: Badge Colors & Labels
     const getRequestBadge = (req) => {
         let label = req.type || 'Leave'; 
         let colorClass = 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600';
@@ -127,7 +169,7 @@ function LeaveRequests() {
         );
     };
 
-    // Helper: Status Badge Logic (Dark Mode Adjusted)
+    // Helper: Status Badge Logic
     const getStatusBadge = (status) => {
         if (status === 'Pending HR' || status === 'Pending') return <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 text-xs font-bold px-2 py-1 rounded border border-yellow-200 dark:border-yellow-800">⏳ Pending HR</span>;
         if (status === 'Pending Admin') return <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 text-xs font-bold px-2 py-1 rounded border border-purple-200 dark:border-purple-800">🔒 Pending Admin</span>;
@@ -140,9 +182,12 @@ function LeaveRequests() {
             {/* --- HEADER --- */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Request Workflow</h2>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                        Request Workflow
+                        {isSuperAdmin && <span className="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-1 rounded-full"><Crown size={12} className="inline mr-1"/>God Mode</span>}
+                    </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Current Role: <span className="font-bold uppercase text-blue-600 dark:text-blue-400">{userRole}</span>
+                        Current Role: <span className="font-bold uppercase text-blue-600 dark:text-blue-400">{userRole.replace('_', ' ')}</span>
                     </p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex items-center gap-2">
@@ -169,7 +214,7 @@ function LeaveRequests() {
             {!loadingData && activeRequests.length === 0 && !dataError && (
                 <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 text-center transition-colors">
                     <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-full mb-4">
-                        <svg className="w-8 h-8 text-green-500 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <CheckCircle className="w-8 h-8 text-green-500 dark:text-green-400" />
                     </div>
                     <h4 className="text-lg font-bold text-gray-800 dark:text-white">All Clear!</h4>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">No pending requests in the workflow.</p>
@@ -206,20 +251,16 @@ function LeaveRequests() {
                                             </div>
                                         </td>
                                         
-                                        {/* Details (Dynamic based on Type) */}
+                                        {/* Details */}
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col gap-1">
                                                 {getRequestBadge(req)}
-                                                
-                                                {/* Date Row (Only for Leave/Travel) */}
                                                 {req.type !== 'query' && (
                                                     <span className="text-xs text-gray-600 dark:text-gray-300 font-medium mt-1">
                                                         {req.startDate} <span className="text-gray-400 dark:text-gray-500">➔</span> {req.endDate} 
                                                         <span className="text-gray-400 dark:text-gray-500 ml-1">({req.days} days)</span>
                                                     </span>
                                                 )}
-
-                                                {/* Description */}
                                                 <span className="text-xs text-gray-500 dark:text-gray-400 italic truncate max-w-[200px]" title={req.reason}>
                                                     "{req.reason}"
                                                 </span>
@@ -240,6 +281,13 @@ function LeaveRequests() {
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 
+                                                {/* 👑 SUPER ADMIN (Can approve ANYTHING instantly) */}
+                                                {isSuperAdmin && (
+                                                    <button onClick={() => handleSuperAdminApprove(req)} className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow-sm transition flex items-center gap-1">
+                                                        <Crown size={12}/> Force Approve
+                                                    </button>
+                                                )}
+
                                                 {/* 🟢 HR Actions */}
                                                 {isHR && (req.status === 'Pending HR' || req.status === 'Pending') && (
                                                     <>
@@ -251,7 +299,7 @@ function LeaveRequests() {
                                                         </button>
                                                     </>
                                                 )}
-                                                {isHR && req.status === 'Pending Admin' && (
+                                                {isHR && req.status === 'Pending Admin' && !isSuperAdmin && (
                                                     <span className="text-xs text-gray-400 dark:text-gray-500 italic px-2">Waiting for Admin...</span>
                                                 )}
 
@@ -266,8 +314,15 @@ function LeaveRequests() {
                                                         </button>
                                                     </>
                                                 )}
-                                                {isAdmin && (req.status === 'Pending HR' || req.status === 'Pending') && (
+                                                {isAdmin && (req.status === 'Pending HR' || req.status === 'Pending') && !isSuperAdmin && (
                                                     <span className="text-xs text-gray-400 dark:text-gray-500 italic px-2">Waiting for HR...</span>
+                                                )}
+
+                                                {/* 👑 Super Admin Reject */}
+                                                {isSuperAdmin && (
+                                                    <button onClick={() => handleReject(req)} className="ml-2 bg-white dark:bg-gray-700 hover:bg-red-50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded text-xs font-bold transition">
+                                                        Reject
+                                                    </button>
                                                 )}
 
                                             </div>

@@ -7,16 +7,17 @@ import { useFirestore } from '../../hooks/useFirestore';
 import { Bell, CheckCircle, XCircle, Clock, Briefcase, Calendar } from 'lucide-react'; 
 
 const NotificationBell = () => {
-    const { userProfile } = useAuth();
-    const userId = userProfile?.uid;
+    const { userProfile, currentUser } = useAuth();
+    // 🔥 FIX: Use currentUser.uid directly as fallback if userProfile is loading
+    const userId = currentUser?.uid; 
     const userRole = userProfile?.role; 
     
     const [isOpen, setIsOpen] = useState(false); 
     const navigate = useNavigate(); 
 
-    // Fetch Notifications for current user
+    // Fetch Notifications ONLY if userId is present
     const notificationFilters = useMemo(() => {
-        return userId ? [['recipientId', '==', userId]] : [];
+        return userId ? [['recipientId', '==', userId]] : null; // 🔥 Return null to skip query if no ID
     }, [userId]);
 
     const notificationOptions = useMemo(() => {
@@ -27,7 +28,11 @@ const NotificationBell = () => {
         data: notifications, 
         loading, 
         updateDocument 
-    } = useFirestore('notifications', notificationFilters, notificationOptions);
+    } = useFirestore(
+        userId ? 'notifications' : null, // 🔥 Conditional Fetching
+        notificationFilters, 
+        notificationOptions
+    );
 
     // Only count/show 'unread' notifications
     const unreadNotifications = useMemo(() => {
@@ -45,7 +50,7 @@ const NotificationBell = () => {
             navigate('/employee/my-tasks');
         } 
         else if (type.includes('leave')) {
-            if (userRole === 'admin' || userRole === 'hr') {
+            if (userRole === 'admin' || userRole === 'hr' || userRole === 'super_admin') {
                 navigate('/hr/leave-requests');
             } 
             else {
@@ -81,7 +86,7 @@ const NotificationBell = () => {
         return <Bell size={18} className="text-gray-500 dark:text-gray-400" />;
     };
 
-    if (loading) return <div className="p-2 animate-spin text-gray-400 dark:text-gray-500"><Clock size={20}/></div>;
+    if (loading && !notifications) return <div className="p-2 animate-spin text-gray-400 dark:text-gray-500"><Clock size={20}/></div>;
 
     return (
         <div className="relative inline-block">

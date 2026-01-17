@@ -6,7 +6,7 @@ import { logoutUser } from '../../api/AuthService';
 import NotificationBell from '../ui/NotificationBell'; 
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, LogOut, User, Settings, ChevronDown, Calendar } from 'lucide-react';
+import { Menu, LogOut, User, Settings, ChevronDown, Calendar, Crown } from 'lucide-react';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png';
 
@@ -17,7 +17,10 @@ function Header({ toggleSidebar }) {
     const dropdownRef = useRef(null);
 
     const fullName = userProfile?.name || currentUser?.email.split('@')[0] || 'Guest';
-    const userRole = userProfile?.role || 'guest';
+    const rawRole = userProfile?.role || 'guest';
+    // Format Role: super_admin -> Super Admin
+    const userRole = rawRole.replace('_', ' '); 
+    const isSuperAdmin = rawRole === 'super_admin';
     const userPhoto = userProfile?.photoURL || DEFAULT_AVATAR;
 
     const today = new Date().toLocaleDateString('en-US', { 
@@ -59,8 +62,9 @@ function Header({ toggleSidebar }) {
                     <div className="flex flex-col">
                         <h1 className="text-sm sm:text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center">
                             <span className="text-gray-400 dark:text-gray-500 font-normal hidden sm:inline mr-1">Hello,</span>
-                            <span className="bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent truncate max-w-[120px] sm:max-w-none capitalize">
+                            <span className="bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent truncate max-w-[120px] sm:max-w-none capitalize flex items-center gap-1">
                                 {fullName.split(' ')[0]}
+                                {isSuperAdmin && <Crown size={16} className="text-amber-500 fill-amber-500 ml-1 animate-pulse" />}
                             </span>
                             <span className="text-xl animate-pulse ml-1">👋</span>
                         </h1>
@@ -87,7 +91,9 @@ function Header({ toggleSidebar }) {
                                     {fullName}
                                 </span>
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider 
-                                    ${userRole === 'admin' ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                                    ${isSuperAdmin ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 
+                                      rawRole === 'admin' ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : 
+                                      'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}`}>
                                     {userRole}
                                 </span>
                             </div>
@@ -96,7 +102,8 @@ function Header({ toggleSidebar }) {
                                 <img 
                                     src={userPhoto} 
                                     alt="User" 
-                                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-white dark:border-gray-800 shadow-sm group-hover:ring-2 ring-indigo-100 dark:ring-indigo-900 transition-all"
+                                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border-2 shadow-sm group-hover:ring-2 transition-all
+                                    ${isSuperAdmin ? 'border-amber-400 ring-amber-200' : 'border-white dark:border-gray-800 ring-indigo-100 dark:ring-indigo-900'}`}
                                 />
                                 <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
                             </div>

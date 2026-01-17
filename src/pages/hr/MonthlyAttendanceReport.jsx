@@ -2,19 +2,41 @@
 
 import React, { useState, useMemo } from 'react';
 import { useFirestore } from '../../hooks/useFirestore';
+import { useAuth } from '../../context/AuthContext'; // 🔥 Import Auth
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { 
     Download, Calendar, User, FileText, CheckCircle, XCircle, 
-    Clock, AlertTriangle, Briefcase 
+    Clock, AlertTriangle, Briefcase, Crown, Shield 
 } from 'lucide-react';
 
+// 🔥 HIERARCHY LEVELS
+const ROLE_LEVELS = {
+    'super_admin': 4,
+    'admin': 3,
+    'hr': 2,
+    'employee': 1
+};
+
 function MonthlyAttendanceReport() {
+    const { userProfile } = useAuth();
+    const currentLevel = ROLE_LEVELS[userProfile?.role] || 0;
+
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
 
-    // 1. Fetch Employees (For Dropdown)
-    const employeeFilters = useMemo(() => [['role', '==', 'employee']], []);
-    const { data: employees } = useFirestore('users', employeeFilters);
+    // 1. Fetch All Users (We filter in JS)
+    const { data: allUsers } = useFirestore('users');
+
+    // 💡 Filter Users Based on Hierarchy
+    const employees = useMemo(() => {
+        if (!allUsers) return [];
+        return allUsers.filter(u => {
+            const uLevel = ROLE_LEVELS[u.role] || 0;
+            // Show only users BELOW current rank (or allow viewing equals if policy allows)
+            // Typically reporting is for subordinates.
+            return uLevel < currentLevel;
+        }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }, [allUsers, currentLevel]);
 
     // 2. Fetch Attendance (Filtered by Employee)
     const attendanceFilters = useMemo(() => 
@@ -23,7 +45,7 @@ function MonthlyAttendanceReport() {
     
     const { data: allRecords, loading } = useFirestore('attendance', attendanceFilters);
 
-    // 3. Filter & Calculate Stats (Logic Unchanged)
+    // 3. Filter & Calculate Stats
     const reportData = useMemo(() => {
         if (!allRecords || !selectedMonth) return { days: [], stats: {} };
 
@@ -92,7 +114,7 @@ function MonthlyAttendanceReport() {
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Monthly Reports</h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-2 flex items-center gap-2">
-                        <FileText size={16} /> Generate and export detailed attendance logs.
+                        <FileText size={16} /> Generate detailed logs for your team.
                     </p>
                 </div>
                 
@@ -111,7 +133,7 @@ function MonthlyAttendanceReport() {
                 
                 {/* Employee Selector */}
                 <div>
-                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Select Employee</label>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Select Team Member</label>
                     <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
                             <User size={18} />
@@ -123,8 +145,8 @@ function MonthlyAttendanceReport() {
                         >
                             <option value="" disabled>-- Choose Employee --</option>
                             {employees?.map(emp => (
-                                <option key={emp.uid} value={emp.uid}>
-                                    {emp.name} ({emp.empId || 'N/A'})
+                                <option key={emp.id} value={emp.id}>
+                                    {emp.name} ({emp.role.toUpperCase()})
                                 </option>
                             ))}
                         </select>
@@ -235,8 +257,8 @@ function MonthlyAttendanceReport() {
                     <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400 rounded-full mb-4 animate-bounce">
                         <User size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">Select an Employee</h3>
-                    <p className="text-gray-500 dark:text-gray-400 mt-2 max-w-sm text-center">Choose an employee and a month from the filters above to generate their attendance report.</p>
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">Select a Team Member</h3>
+                    <p className="text-gray-500 dark:text-gray-400 mt-2 max-w-sm text-center">Choose an employee from the dropdown to view their report.</p>
                 </div>
             )}
         </div>

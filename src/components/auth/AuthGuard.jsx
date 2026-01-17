@@ -5,39 +5,53 @@ import { useAuth } from '../../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 
 /**
- * Ye component check karta hai ki user ke paas required access hai ya nahi.
+ * Ye component security guard hai. Check karta hai ki user allowed hai ya nahi.
  * @param {Array<string>} allowedRoles - Roles jinko access ki permission hai.
  */
 const AuthGuard = ({ children, allowedRoles }) => {
-    // 💡 useAuth se current user, role, aur loading state le lo
-    const { currentUser, currentRole, loading } = useAuth();
+    // 💡 useAuth se data nikalo
+    const { currentUser, userProfile, loading } = useAuth();
+    
+    // Role safe tarike se nikalo (agar context me direct currentRole nahi hai toh profile se le lo)
+    const role = userProfile?.role; 
 
-    // 1. Agar data load ho raha hai, toh wait karo
+    // 1. Loading State (Thoda acha dikhna chahiye)
     if (loading) {
-        return <div>Checking permissions...</div>;
+        return (
+            <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+                <div className="text-indigo-600 font-bold animate-pulse">Checking Permissions...</div>
+            </div>
+        );
     }
 
-    // 2. Agar user logged in nahi hai, toh Login page pe bhej do
+    // 2. Not Logged In -> Login Page
     if (!currentUser) {
-        console.log("User not logged in. Redirecting to login.");
-        return <Navigate to="/login" replace />; // 'replace' history ko replace karta hai
+        return <Navigate to="/login" replace />;
     }
 
-    // 3. Agar user logged in hai, toh role check karo
-    if (currentRole && !allowedRoles.includes(currentRole)) {
-        // Agar user logged in hai, par role allowed nahi hai
-        console.warn(`Access Denied! User Role: ${currentRole}`);
-        // Unauthorized user ko wapas unke dashboard pe bhej do, ya 403 page dikhao
+    // 3. 👑 SUPER ADMIN BYPASS (God Mode)
+    // Agar Super Admin hai, toh usse 'allowedRoles' check karne ki zarurat nahi. 
+    // Woh sab kuch dekh sakta hai.
+    if (role === 'super_admin') {
+        return <>{children}</>;
+    }
+
+    // 4. Role Validation
+    if (allowedRoles && !allowedRoles.includes(role)) {
+        console.warn(`Access Denied! User Role: ${role}, Required: ${allowedRoles}`);
         
+        // Unauthorized user ko sahi dashboard par fenk do
         let redirectPath = '/';
-        if (currentRole === 'admin') redirectPath = '/admin/dashboard';
-        else if (currentRole === 'hr') redirectPath = '/hr/dashboard';
-        else if (currentRole === 'employee') redirectPath = '/employee/dashboard';
+        
+        if (role === 'super_admin') redirectPath = '/admin/dashboard'; // Super Admin -> Admin Dash
+        else if (role === 'admin') redirectPath = '/admin/dashboard';
+        else if (role === 'hr') redirectPath = '/hr/dashboard';
+        else if (role === 'employee') redirectPath = '/employee/dashboard';
         
         return <Navigate to={redirectPath} replace />;
     }
 
-    // 4. Agar sab theek hai (login + correct role), toh children component render kar do
+    // 5. Access Granted
     return <>{children}</>;
 };
 
