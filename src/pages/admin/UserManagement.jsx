@@ -258,7 +258,7 @@ function UserManagement() {
         }
     };
 
-    const departments = ['IT', 'HR', 'Sales', 'Marketing', 'Management', 'Finance', 'Operations', 'Other'];
+    const departments = ['IT', 'HR', 'Sales', 'Marketing', 'Management', 'Finance', 'Operations', 'Other' , 'Customer Support', 'Research & Development', 'Legal', 'Administration', 'Procurement', 'Logistics', 'Quality Assurance', 'Public Relations', 'Training & Development', 'Security', 'Facilities Management', 'Business Development', 'Strategy', 'Data Analytics', 'Design', 'Content Creation', 'Product Management', 'Engineering', 'Consulting', 'Healthcare', 'Education', 'Government', 'Non-Profit'];
 
     return (
         <div className="min-h-screen bg-gray-50/50 dark:bg-gray-900 p-6 md:p-8 transition-colors duration-300">

@@ -78,7 +78,6 @@ const COUNTRY_CODES = [
 ].sort((a, b) => a.label.localeCompare(b.label)); // Sort alphabetically for better UX
 
 // --- UTILS ---
-// --- UTILS ---
 const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount || 0);
 
 const parseDate = (dateVal) => {
@@ -96,10 +95,9 @@ const formatDate = (dateVal) => {
 // 🔥 UPDATED CHANGE LOG LOGIC (Deep Compare)
 const generateChangeLog = (oldData, newData) => {
   const changes = [];
-  // Inn keys ko hum ignore karenge kyunki ye backend fields hain
   const ignoredKeys = ['history', 'appointments', 'createdAt', 'createdBy', 'id', 'receivedAmount', 'paymentHistory', 'updatedAt', 'followUps', 'photos', 'products', 'phoneNumbers'];
 
-  // 1. Basic Fields Compare (Name, Status, Email, etc.)
+  // 1. Basic Fields Compare
   Object.keys(newData).forEach(key => {
     if (ignoredKeys.includes(key)) return;
     const oldVal = (oldData[key] || '').toString().trim();
@@ -114,40 +112,31 @@ const generateChangeLog = (oldData, newData) => {
   // 2. Phone Numbers Compare
   const oldPhones = oldData.phoneNumbers || [];
   const newPhones = newData.phoneNumbers || [];
-  // Agar length change hui ya content match nahi hua
   if (JSON.stringify(oldPhones) !== JSON.stringify(newPhones)) {
       changes.push(`Phone Numbers Updated`);
   }
 
-  // 3. Product Specific Compare (Ye hai main logic)
+  // 3. Product Specific Compare
   const oldProds = oldData.products || [];
   const newProds = newData.products || [];
 
   if (oldProds.length !== newProds.length) {
       changes.push(`Products Count: ${oldProds.length} ➝ ${newProds.length}`);
   } else {
-      // Agar product count same hai, toh andar ki fields check karo
       newProds.forEach((newP, i) => {
           const oldP = oldProds[i] || {};
           Object.keys(newP).forEach(k => {
-              // Ignore internal keys
               if (k === 'id') return;
-
-              // Boolean fields (Ready/Not Ready)
               if(k === 'ornamentReady') {
                   if(oldP[k] !== newP[k]) {
                       changes.push(`Item ${i+1} Status: ${oldP[k]?'Ready':'Process'} ➝ ${newP[k]?'Ready':'Process'}`);
                   }
                   return;
               }
-              
               const vOld = (oldP[k] || '').toString().trim();
               const vNew = (newP[k] || '').toString().trim();
-              
               if (vOld !== vNew) {
-                  // Key ko readability ke liye format karo (e.g. skuNo -> Sku No)
                   const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                  // Log format: "Item 1 Type: Empty -> Ring"
                   changes.push(`Item ${i+1} ${label}: ${vOld || 'Empty'} ➝ ${vNew}`);
               }
           });
@@ -262,7 +251,7 @@ const BirthdayReportModal = ({ isOpen, onClose, leads }) => {
                   {/* Upcoming Section */}
                   <div>
                       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                         <Calendar size={14}/> Upcoming (Next 7 Days)
+                          <Calendar size={14}/> Upcoming (Next 7 Days)
                       </h3>
                       {upcoming.length === 0 ? <div className="p-8 text-center bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 text-gray-400 text-sm">No upcoming birthdays this week.</div> : (
                         <div className="grid gap-3">
@@ -287,7 +276,7 @@ const BirthdayReportModal = ({ isOpen, onClose, leads }) => {
                   {/* Past Section */}
                   <div>
                       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                         <Clock size={14}/> Recent Past
+                          <Clock size={14}/> Recent Past
                       </h3>
                       {recent.length === 0 ? <p className="text-sm text-gray-400 italic">No recent birthdays.</p> : (
                         <div className="grid gap-3">
@@ -417,22 +406,22 @@ const LeadDetailView = ({ lead, onClose, onEdit, onExportSingle, onDelete, canMa
                                {lead.products.map((prod, idx) => (
                                    <div key={idx} className="p-5 bg-gray-50 dark:bg-gray-700/30 rounded-2xl border border-gray-100 dark:border-gray-700/50 hover:border-indigo-100 transition-colors">
                                        <div className="flex justify-between items-start mb-4 border-b border-gray-200 dark:border-gray-600 pb-2">
-                                           <h4 className="font-bold text-indigo-700 dark:text-indigo-300 text-base">{prod.type}</h4>
-                                           <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${prod.ornamentReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                {prod.ornamentReady ? 'Ready' : 'In Process'}
-                                           </span>
+                                            <h4 className="font-bold text-indigo-700 dark:text-indigo-300 text-base">{prod.type}</h4>
+                                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${prod.ornamentReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                 {prod.ornamentReady ? 'Ready' : 'In Process'}
+                                            </span>
                                        </div>
                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-y-4 gap-x-8 text-xs">
-                                           <DetailRow label="Item" value={prod.particulars} />
-                                           <DetailRow label="Metal" value={prod.metal} />
-                                           <DetailRow label="Weight" value={`${prod.weight} ${prod.unit}`} highlight />
-                                           <DetailRow label="Size" value={prod.size} />
-                                           <DetailRow label="SKU" value={prod.skuNo} fontMono />
-                                           <DetailRow label="Cert No." value={prod.certificateNo} />
-                                           <DetailRow label="Lab Name" value={prod.labName} />
-                                           <DetailRow label="Jeweller" value={prod.jewellerName} />
-                                           <DetailRow label="Phy ID" value={prod.physicalIdentificationNo} fontMono /> 
-                                           <DetailRow label="Rate" value={prod.unitRate} />
+                                            <DetailRow label="Item" value={prod.particulars} />
+                                            <DetailRow label="Metal" value={prod.metal} />
+                                            <DetailRow label="Weight" value={`${prod.weight} ${prod.unit}`} highlight />
+                                            <DetailRow label="Size" value={prod.size} />
+                                            <DetailRow label="SKU" value={prod.skuNo} fontMono />
+                                            <DetailRow label="Cert No." value={prod.certificateNo} />
+                                            <DetailRow label="Lab Name" value={prod.labName} />
+                                            <DetailRow label="Jeweller" value={prod.jewellerName} />
+                                            <DetailRow label="Phy ID" value={prod.physicalIdentificationNo} fontMono /> 
+                                            <DetailRow label="Rate" value={prod.unitRate} />
                                        </div>
                                    </div>
                                ))}
@@ -770,8 +759,8 @@ const LeadFormModal = ({ isOpen, onClose, onSave, initialData, title, allUsers, 
                                                 value={p.code}
                                                 onChange={(e) => handlePhoneChange(i, 'code', e.target.value)}
                                            >
-                                               {/* FIX: UNIQUE KEY GENERATION & COMPREHENSIVE LIST */}
-                                               {COUNTRY_CODES.map((c, idx) => <option key={`${c.code}-${c.label}-${idx}`} value={c.code}>{c.label}</option>)}
+                                                {/* FIX: UNIQUE KEY GENERATION & COMPREHENSIVE LIST */}
+                                                {COUNTRY_CODES.map((c, idx) => <option key={`${c.code}-${c.label}-${idx}`} value={c.code}>{c.label}</option>)}
                                            </select>
                                            <input 
                                                 className="input-std rounded-l-none" 
@@ -995,6 +984,7 @@ const LeadFormModal = ({ isOpen, onClose, onSave, initialData, title, allUsers, 
 // --- MAIN CONTROLLER ---
 const LeadsManagementSystem = () => {
     const { userProfile, currentUser } = useAuth();
+    // 1. All hooks unconditionally at the top
     const { documents: leads } = useCollection('leads'); 
     const { documents: allUsers } = useCollection('users');
 
@@ -1012,6 +1002,7 @@ const LeadsManagementSystem = () => {
 
     const navigate = useNavigate(); 
     const fileInputRef = useRef(null);
+    
     const role = userProfile?.role || 'employee';
     const isSuperAdmin = role === 'super_admin';
     const isAdmin = role === 'admin';
@@ -1033,7 +1024,80 @@ const LeadsManagementSystem = () => {
         return () => unsubscribe();
     }, []);
 
-    const hasAccess = canManageAccess || allowedUserIds.includes(userProfile?.uid) || true; 
+    // 2. Moved useMemo here (Before any returns)
+    // --- ENHANCED SORTING LOGIC ---
+    const filteredLeads = useMemo(() => {
+        if (!leads) return [];
+        let data = [...leads]; // Create a shallow copy
+        
+        if (searchTerm) {
+            const lower = searchTerm.toLowerCase();
+            data = data.filter(l => 
+                l.name.toLowerCase().includes(lower) || 
+                (l.phoneNumbers && l.phoneNumbers.some(p => p.includes(lower))) ||
+                (l.phone && l.phone.includes(lower))
+            );
+        }
+
+        return data.sort((a, b) => {
+            switch (sortBy) {
+                case 'newest':
+                    return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+                case 'oldest':
+                    return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
+                case 'priority':
+                    const pMap = { 'High': 3, 'Medium': 2, 'Low': 1 };
+                    return (pMap[b.priority] || 0) - (pMap[a.priority] || 0);
+                case 'probability':
+                    return (parseFloat(b.conversionProbability) || 0) - (parseFloat(a.conversionProbability) || 0);
+                case 'delivery':
+                    if (!a.deliveryDate) return 1;
+                    if (!b.deliveryDate) return -1;
+                    return new Date(a.deliveryDate) - new Date(b.deliveryDate);
+                case 'name':
+                    return a.name.localeCompare(b.name);
+                case 'status':
+                    return a.status.localeCompare(b.status);
+                default:
+                    return 0;
+            }
+        });
+    }, [leads, searchTerm, sortBy]);
+
+    const isNew = (date) => {
+        if(!date) return false;
+        const d = date.toDate ? date.toDate() : new Date(date);
+        return (new Date() - d) < (24 * 60 * 60 * 1000);
+    };
+
+    // 3. Permission checks and conditional returns
+    // 🔥 FIXED: Removed '|| true' from end. Now it strictly checks permissions.
+    const hasAccess = canManageAccess || allowedUserIds.includes(userProfile?.uid); 
+
+    if (isLoadingPerms) return <div className="h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>;
+    
+    // 🔥 FIXED: Access Denied Screen added here
+    if (!hasAccess) {
+        return (
+            <div className="h-dvh flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 text-center p-6">
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 max-w-md w-full">
+                    <div className="h-20 w-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Lock size={40} />
+                    </div>
+                    <h1 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Access Restricted</h1>
+                    <p className="text-gray-500 dark:text-gray-400 mb-8">
+                        You do not have permission to view the Leads Management System. Please contact your administrator.
+                    </p>
+                    <button 
+                        onClick={() => navigate('/')} 
+                        className="w-full py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl font-bold hover:scale-[1.02] transition-transform"
+                    >
+                        Go Back Home
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     const handleSave = async (data) => {
         try {
@@ -1188,53 +1252,6 @@ const LeadsManagementSystem = () => {
         e.target.value = null; 
     };
 
-    // --- ENHANCED SORTING LOGIC ---
-    const filteredLeads = useMemo(() => {
-        if (!leads) return [];
-        let data = [...leads]; // Create a shallow copy
-        
-        if (searchTerm) {
-            const lower = searchTerm.toLowerCase();
-            data = data.filter(l => 
-                l.name.toLowerCase().includes(lower) || 
-                (l.phoneNumbers && l.phoneNumbers.some(p => p.includes(lower))) ||
-                (l.phone && l.phone.includes(lower))
-            );
-        }
-
-        return data.sort((a, b) => {
-            switch (sortBy) {
-                case 'newest':
-                    return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
-                case 'oldest':
-                    return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
-                case 'priority':
-                    const pMap = { 'High': 3, 'Medium': 2, 'Low': 1 };
-                    return (pMap[b.priority] || 0) - (pMap[a.priority] || 0);
-                case 'probability':
-                    return (parseFloat(b.conversionProbability) || 0) - (parseFloat(a.conversionProbability) || 0);
-                case 'delivery':
-                    if (!a.deliveryDate) return 1;
-                    if (!b.deliveryDate) return -1;
-                    return new Date(a.deliveryDate) - new Date(b.deliveryDate);
-                case 'name':
-                    return a.name.localeCompare(b.name);
-                case 'status':
-                    return a.status.localeCompare(b.status);
-                default:
-                    return 0;
-            }
-        });
-    }, [leads, searchTerm, sortBy]);
-
-    if (isLoadingPerms) return <div className="h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>;
-    
-    const isNew = (date) => {
-        if(!date) return false;
-        const d = date.toDate ? date.toDate() : new Date(date);
-        return (new Date() - d) < (24 * 60 * 60 * 1000);
-    };
-
     return (
         <div className="h-dvh bg-gray-50/50 dark:bg-gray-900 flex overflow-hidden font-sans text-gray-800 dark:text-gray-100 relative">
             <AnimatePresence>
@@ -1245,7 +1262,6 @@ const LeadsManagementSystem = () => {
               {isBirthdayModalOpen && <BirthdayReportModal isOpen={isBirthdayModalOpen} onClose={()=>setIsBirthdayModalOpen(false)} leads={leads} />}
             </AnimatePresence>
 
-            {/* 🔥 MISSING COMPONENT FIXED HERE 🔥 */}
             <AnimatePresence>
                 {isLeadModalOpen && (
                     <LeadFormModal 
@@ -1262,7 +1278,6 @@ const LeadsManagementSystem = () => {
                 )}
             </AnimatePresence>
 
-            {/* 🛡️ ACCESS MODAL ADDED HERE 🛡️ */}
             <AnimatePresence>
                 {isAccessModalOpen && (
                     <AccessManagementModal
@@ -1351,26 +1366,26 @@ const LeadsManagementSystem = () => {
                                    {isNew(lead.createdAt) && <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] px-3 py-1 rounded-bl-xl font-bold z-10">NEW</div>}
                                    
                                    <div className="flex justify-between mb-3 relative z-10">
-                                       <div>
-                                           <h3 className="font-bold text-lg text-gray-800 dark:text-white truncate pr-2">{lead.name}</h3>
-                                           <div className="flex items-center gap-2 mt-1">
-                                               <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase ${lead.priority === 'High' ? 'bg-rose-100 text-rose-600' : 'bg-gray-100 text-gray-500'}`}>{lead.priority || 'Medium'}</span>
-                                               <span className="text-xs text-gray-400 font-medium">{formatDate(lead.leadGenDate)}</span>
-                                           </div>
-                                       </div>
-                                       <div className="h-10 w-10 rounded-full bg-gray-50 dark:bg-gray-700 flex items-center justify-center text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
-                                           <ChevronRight size={20}/>
-                                       </div>
+                                        <div>
+                                            <h3 className="font-bold text-lg text-gray-800 dark:text-white truncate pr-2">{lead.name}</h3>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase ${lead.priority === 'High' ? 'bg-rose-100 text-rose-600' : 'bg-gray-100 text-gray-500'}`}>{lead.priority || 'Medium'}</span>
+                                                <span className="text-xs text-gray-400 font-medium">{formatDate(lead.leadGenDate)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="h-10 w-10 rounded-full bg-gray-50 dark:bg-gray-700 flex items-center justify-center text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                                            <ChevronRight size={20}/>
+                                        </div>
                                    </div>
                                    
                                    <div className="space-y-2 relative z-10">
-                                       <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 dark:bg-gray-700/50 p-2 rounded-xl">
-                                           <Phone size={14}/> {lead.phoneNumbers?.[0] || lead.phone || 'No Phone'}
-                                       </div>
-                                       <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-                                           <span className={`text-xs font-bold px-2 py-1 rounded-lg ${lead.status === 'Converted' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-600'}`}>{lead.status}</span>
-                                           <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(((parseFloat(lead.productAmount)||0) + (parseFloat(lead.makingCharges)||0)) - (parseFloat(lead.discount)||0))}</span>
-                                       </div>
+                                        <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 dark:bg-gray-700/50 p-2 rounded-xl">
+                                            <Phone size={14}/> {lead.phoneNumbers?.[0] || lead.phone || 'No Phone'}
+                                        </div>
+                                        <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                            <span className={`text-xs font-bold px-2 py-1 rounded-lg ${lead.status === 'Converted' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-600'}`}>{lead.status}</span>
+                                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(((parseFloat(lead.productAmount)||0) + (parseFloat(lead.makingCharges)||0)) - (parseFloat(lead.discount)||0))}</span>
+                                        </div>
                                    </div>
                                </motion.div>
                            ))}
